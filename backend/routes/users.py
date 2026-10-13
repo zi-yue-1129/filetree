@@ -1,10 +1,11 @@
 """User dashboard and owner profile management routes."""
 
 import os
+import orjson
 from typing import Any, Optional
 
 from fastapi import APIRouter, Form, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
 from backend.config import settings
 from backend.core.auth import extract_bearer_token, verify_password
@@ -57,7 +58,7 @@ async def get_user_dashboard(
     # Get folders with visibility logic (hides locked folders + descendants if unauth)
     visible_folders, hidden_folder_ids = (
         await user_service.get_visible_folders_and_hidden_ids(
-            user["id"], is_authenticated
+            user["id"], is_authenticated, folders=user["folders"]
         )
     )
 
@@ -74,7 +75,7 @@ async def get_user_dashboard(
         username, excluded_folder_ids=hidden_folder_ids, include_locked=is_authenticated
     )
 
-    return JSONResponse({
+    return Response(content=orjson.dumps({
         "user": {
             "username": user["username"],
             "show_in_list": user["show_in_list"],
@@ -87,7 +88,7 @@ async def get_user_dashboard(
         "files": all_files,
         "urls": urls,
         "folders": visible_folders,
-    })
+    }), media_type="application/json")
 
 
 @router.post("/user/change-password")

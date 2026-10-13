@@ -331,3 +331,24 @@ def test_hash_reads_in_bounded_large_blocks(tmp_path: Path, monkeypatch: pytest.
     digest = DedupService().calculate_hash(path)
     assert digest == hashlib.sha256(content).hexdigest()
     assert read_sizes and len(read_sizes) <= 5
+
+
+def test_dashboard_loads_folder_tree_once(client: TestClient, account: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    """A dashboard reuses the loaded folder tree for lock visibility checks."""
+    from backend.services.database import get_users_db
+
+    token = token_service.create_session_token(account["username"])
+    database = client.portal.call(get_users_db)
+    original_execute = database.execute
+    folder_queries: list[str] = []
+
+    async def tracked_execute(sql: str, parameters: Any = ()) -> Any:
+        """Count actual folder selects while forwarding all database calls."""
+        if "FROM folders WHERE user_id" in sql:
+            folder_queries.append(sql)
+        return await original_execute(sql, parameters)
+
+    monkeypatch.setattr(database, "execute", tracked_execute)
+    response = client.get(f"/api/user/{account['username']}", headers=bearer(token), timeout=5)
+    assert response.status_code == 200
+    assert len(folder_queries) == 1
