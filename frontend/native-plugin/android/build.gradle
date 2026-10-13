@@ -1,6 +1,7 @@
 // Android library for the FileNexusNative Capacitor plugin (Kotlin).
 ext {
     androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
+    androidxCoreVersion = project.hasProperty('androidxCoreVersion') ? rootProject.ext.androidxCoreVersion : '1.17.0'
 }
 
 buildscript {
@@ -53,5 +54,17 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    // Background uploads, photo backup scans and push token sync.
+    implementation 'androidx.work:work-runtime-ktx:2.11.2'
+    // HTTP for the TUS client, device API calls and APK downloads
+    // (same major as @capgo/capacitor-updater to avoid duplicate stacks).
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // FCM. Compiles without google-services.json; push is reported as
+    // unavailable at runtime when Firebase was not initialised.
+    implementation 'com.google.firebase:firebase-messaging:24.1.2'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
