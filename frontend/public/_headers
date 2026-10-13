@@ -1,0 +1,24 @@
+# Cloudflare Pages response headers (copied to static/dist/_headers by Vite).
+# Ignored by the FastAPI SPA fallback and the Capacitor/Tauri bundles.
+# Note: when several rules match, Pages joins repeated header values with a
+# comma, so Cache-Control is set only in path-specific rules, never in /*.
+
+# Security headers for every response. No CSP / X-Frame-Options on purpose:
+# the app talks to a separate API origin and is embedded by native shells.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Vite emits content-hashed file names under /assets/, so they never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Entry points and un-hashed metadata must always be revalidated so a new
+# deploy is picked up immediately (SPA routes such as /admin or /share/<token>
+# fall back to index.html and keep Pages' default max-age=0, must-revalidate).
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/manifest.json
+  Cache-Control: no-cache
