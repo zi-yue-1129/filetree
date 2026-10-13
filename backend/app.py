@@ -10,11 +10,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
+from backend.core.compression import ApiGZipMiddleware
 from backend.routes.api import router as api_router
 from backend.routes.tus import router as tus_router
 from backend.routes.tus import cleanup_expired_uploads
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import Any, AsyncIterator, Optional
 from starlette.concurrency import run_in_threadpool
 import logging
 
@@ -61,18 +62,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     
     # Shutdown: Cancel cleanup task
     cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
+    await asyncio.gather(cleanup_task, return_exceptions=True)
 
     await push_service.shutdown()
+    from backend.routes.tus import metadata_store
+    await run_in_threadpool(metadata_store.close)
 
     # Shutdown: Close database connections
     await close_all()
 
 
-def suppress_connection_reset_error(loop, context):
+def suppress_connection_reset_error(
+    loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+) -> None:
     """Custom exception handler to suppress ConnectionResetError on Windows."""
     exception = context.get("exception")
     if isinstance(exception, (ConnectionResetError, ConnectionAbortedError)):
@@ -82,7 +84,7 @@ def suppress_connection_reset_error(loop, context):
     loop.default_exception_handler(context)
 
 
-def apply_windows_patches():
+def apply_windows_patches() -> None:
     """Apply monkey-patches to asyncio for Windows to suppress specific errors."""
     if sys.platform == "win32":
         try:
@@ -92,16 +94,16 @@ def apply_windows_patches():
             # Backup the original method
             orig_call_connection_lost = _ProactorBasePipeTransport._call_connection_lost
 
-            def patched_call_connection_lost(self, exc):
+            def patched_call_connection_lost(self: Any, exc: Optional[BaseException]) -> None:
                 try:
                     orig_call_connection_lost(self, exc)
                 except (ConnectionResetError, ConnectionAbortedError):
                     # Suppress the error during shutdown or connection loss
-                    pass
+                    return
                 except socket.error as e:
                     # Capture specific WinError 10054 or 10038
                     if getattr(e, "winerror", None) in (10054, 10038):
-                        pass
+                        return
                     else:
                         raise
 
@@ -132,6 +134,7 @@ app = FastAPI(
 # Set up Rate Limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(ApiGZipMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 # Enable CORS for security and cross-origin support
@@ -174,7 +177,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from backend.services.event_service import event_service
 
 @app.websocket("/ws/global")
-async def global_websocket_endpoint(websocket: WebSocket):
+async def global_websocket_endpoint(websocket: WebSocket) -> None:
     """Global WebSocket for system-wide updates (e.g. user list)."""
     # Optional: We could check a handshake token here for stricter security
     # await websocket.accept()
@@ -189,13 +192,8 @@ async def global_websocket_endpoint(websocket: WebSocket):
         event_service.disconnect_global(websocket)
 
 @app.get("/{path:path}")
-async def serve_spa(request: Request, path: str):
+async def serve_spa(request: Request, path: str) -> Any:
     """Serve the SPA or static assets."""
-    # Special case for /uploads which should be handled by a specific route or StaticFiles
-    if path.startswith("uploads/"):
-        # We'll implement a proper download route later if needed
-        pass
-
     # Serve a real file only if it resolves inside static_dir; this blocks
     # traversal via encoded "../" segments or absolute paths (e.g. "%2Fetc").
     if "\x00" not in path:

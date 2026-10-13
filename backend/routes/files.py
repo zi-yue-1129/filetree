@@ -1,6 +1,7 @@
 """Owner-scoped file, folder, upload, and share API routes."""
 
 import os
+from pathlib import Path
 from typing import Any, List, Optional
 
 from fastapi import (
@@ -12,7 +13,8 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.background import BackgroundTask
 
 from backend.config import settings
@@ -23,6 +25,7 @@ from backend.core.rate_limit import TUS_LIMIT, UPLOAD_LIMIT, limiter
 from backend.core.utils import get_client_ip
 from backend.schemas import BatchActionRequest, FileInfo, ShareInfo
 from backend.services.audit_service import AuditService
+from backend.services.archive_service import create_archive
 from backend.services.device_service import device_service
 from backend.services.event_service import event_service
 from backend.services.file_service import file_service
@@ -556,6 +559,7 @@ async def get_thumbnail(
     filename: str,
     token: Optional[str] = None,
     authorization: Optional[str] = Header(None),
+    version: Optional[str] = None,
 ) -> Any:
     """Get a thumbnail for a file.
 
@@ -565,6 +569,7 @@ async def get_thumbnail(
         filename: Target file name.
         token: Caller credential or scoped file capability, where supported.
         authorization: Optional Bearer authorization header.
+        version: Optional cache identity for an immutable thumbnail URL.
 
     Returns:
         Endpoint response.
@@ -599,13 +604,26 @@ async def get_thumbnail(
 
     thumb_path = await thumbnail_service.get_thumbnail(file_path)
     if thumb_path:
-        return FileResponse(
-            path=thumb_path,
-            headers={
-                "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "default-src 'none'; sandbox",
-            },
-        )
+        thumbnail_path = Path(thumb_path)
+        if thumbnail_path == file_path:
+            identity_path = await run_in_threadpool(thumbnail_service._get_cache_path, file_path)
+        else:
+            identity_path = thumbnail_path
+        identity = identity_path.stem
+        etag = f'"{identity}"'
+        headers = {
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "ETag": etag,
+            "Cache-Control": (
+                "private, max-age=31536000, immutable" if version == identity
+                else "private, no-cache"
+            ),
+        }
+        validators = request.headers.get("if-none-match", "")
+        if any(value.strip().removeprefix("W/") in {etag, "*"} for value in validators.split(",")):
+            return Response(status_code=304, headers=headers)
+        return FileResponse(path=thumb_path, headers=headers)
 
     raise HTTPException(status_code=404, detail="Thumbnail not available")
 
@@ -752,24 +770,15 @@ async def batch_download(
                 status_code=403, detail="部分檔案已鎖定或目錄已加密，需要驗證"
             )
 
-    import tempfile
-    import zipfile
-
-    temp_zip = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
-    temp_zip_path = temp_zip.name
-    temp_zip.close()
-
-    with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fname in filenames:
-            record = access_by_name.get(fname)
-            fid = record.folder_id if record else None
-            path_names = user_service.folder_path_names_from_map(folders_by_id, fid)
-            folder_path = file_service._get_folder_path(user["folder"], path_names)
-            file_path = folder_path / fname
-
-            if file_path.exists():
-                arcname = os.path.join(*path_names, fname) if path_names else fname
-                zf.write(file_path, arcname=arcname)
+    entries: list[tuple[Path, str]] = []
+    for filename in filenames:
+        record = access_by_name.get(filename)
+        folder_id = record.folder_id if record else None
+        path_names = user_service.folder_path_names_from_map(folders_by_id, folder_id)
+        folder_path = file_service.upload_base / user["folder"] / Path(*path_names)
+        archive_name = os.path.join(*path_names, filename) if path_names else filename
+        entries.append((folder_path / filename, archive_name))
+    temp_zip_path = await create_archive(entries)
 
     return FileResponse(
         path=temp_zip_path,

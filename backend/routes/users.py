@@ -4,6 +4,7 @@ import os
 from typing import Any, Optional
 
 from fastapi import APIRouter, Form, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from backend.config import settings
 from backend.core.auth import extract_bearer_token, verify_password
@@ -73,7 +74,7 @@ async def get_user_dashboard(
         username, excluded_folder_ids=hidden_folder_ids, include_locked=is_authenticated
     )
 
-    return {
+    return JSONResponse({
         "user": {
             "username": user["username"],
             "show_in_list": user["show_in_list"],
@@ -86,7 +87,7 @@ async def get_user_dashboard(
         "files": all_files,
         "urls": urls,
         "folders": visible_folders,
-    }
+    })
 
 
 @router.post("/user/change-password")
