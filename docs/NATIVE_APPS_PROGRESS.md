@@ -3,6 +3,67 @@
 Newest entries first. Each entry: date, workstream, branch, what is done,
 what is next, how to verify. See `docs/NATIVE_APPS.md` for the contract.
 
+## 2026-10-13 — Mobile core + Android (Claude), branch `feat/native-mobile` — Android implementation
+Done
+- Android plugin (`frontend/native-plugin/android`, Kotlin): hand-rolled TUS
+  client on OkHttp (not tus-java-client: OkHttp is already shipped by Capgo,
+  we must rewrite the backend's `Location` (built from `request.base_url`,
+  e.g. `http://backend:5168/...` behind proxies) onto the configured origin,
+  and resume state lives in our own SQLite job store); two WorkManager queue
+  runners (any network / unmetered) as a `dataSync` foreground service with
+  progress notification, exponential backoff (30 s base, 10 attempts),
+  resume via persisted upload URL + HEAD, completion/failure notifications,
+  `uploadProgress` events. Share target = translucent
+  `ShareReceiverActivity` (SEND/SEND_MULTIPLE `*/*`, text shares become a
+  `.txt`): copies into `filesDir/shared`, enqueues when signed in, otherwise
+  stores items and opens the app (`getSharedItems`/`sharedItems`, UI routes to
+  /settings). Photo backup: MediaStore `Files` query by `_ID` watermark (only
+  media added after enabling), periodic (1 h) + content-URI trigger worker,
+  Android 13 READ_MEDIA_*, Android 14 partial access reported as `limited`,
+  folder from `POST /api/backup/folder`. FCM: `firebase-messaging` always
+  linked, Google Services plugin applied only if
+  `android/app/google-services.json` exists; `registerPush()` rejects
+  `PUSH_NOT_CONFIGURED` otherwise; token synced with `PATCH /api/devices/{id}`
+  (WorkManager, retried). APK updater: download + SHA-256 + FileProvider +
+  ACTION_VIEW installer, "install unknown apps" flow.
+- App: versionName/versionCode from `-PappVersion=X.Y.Z` (contract §1),
+  release signing from `ANDROID_KEYSTORE_FILE` + `ANDROID_*` env.
+- Web UI (`frontend/src/native/**`): `/settings` (native only, sidebar item)
+  with device login/logout, server URL override (Capacitor Preferences,
+  applied before render; `api.ts` `API_ORIGIN` is now a live binding with
+  `setApiOrigin`, web unchanged), photo backup, upload queue (progress/cancel/
+  clear), pending shared items, versions + "check for updates". Landing page
+  uses the native picker + `enqueueUpload` when native (folder button hidden).
+  Startup: `notifyAppReady()`, APK update prompt, live bundle check
+  (`web-bundle.json` via native `CapacitorHttp`, respects `minNativeVersion`,
+  Capgo `download` with sha256 checksum + `next()`).
+- CI: `build-android.yml`, `build-web-bundle.yml` (workflow_call `version`
+  for release; push on `feat/native-mobile` / dispatch = artifacts only).
+  `minNativeVersion` comes from `frontend/package.json` `filenexus.minNativeVersion`
+  (bump it when a web bundle needs newer native code). Optional secret
+  `GOOGLE_SERVICES_JSON` enables FCM in CI builds.
+
+How to verify
+- `cd frontend && npm ci && npm run build && npx cap sync`
+- `cd frontend/android && ./gradlew assembleDebug :filenexus-native:testDebugUnitTest`
+  (needs `ANDROID_HOME` with platforms;android-36, JDK 21).
+- Contract replay against the real backend (register → backup folder →
+  PATCH push token → TUS create/HEAD/PATCH into `相簿備份/<device>` → revoke)
+  passed in-process with FastAPI TestClient.
+
+Not verified (needs a real device/emulator): actual background uploads, share
+sheet, photo permission dialogs, FCM delivery, APK install, Capgo bundle
+swap/rollback. No emulator was available.
+
+Next / notes for others
+- iOS: implement the same `definitions.ts` API; `installApkUpdate` etc. are
+  Android-only (reject `unavailable`). `getPlatform()` in `src/native/index.ts`.
+- Backend: CORS must allow the WebView origins `https://localhost` (Android)
+  and `capacitor://localhost` (iOS) — default `cors_origins: ["*"]` does.
+- Pre-existing ESLint errors (not from this workstream) remain in
+  `src/contexts/AuthContext.tsx`, `src/contexts/ThemeContext.tsx`,
+  `src/hooks/useUserDashboard.ts`; all files touched here lint clean.
+
 ## 2026-10-13 — Mobile core + Android (Claude), branch `feat/native-mobile` — milestone 1
 - Capacitor 8.5.3 in `frontend/` (`capacitor.config.ts`, `webDir: ../static/dist`
   = Vite `outDir`), `android/` and `ios/` (SPM) platforms generated, icons and

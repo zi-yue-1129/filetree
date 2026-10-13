@@ -136,8 +136,8 @@ full version tag.
 - `configure({serverUrl, deviceToken})` — persist credentials natively so
   background work survives app kill.
 - `enqueueUpload({files: [{uri, name, mimeType}], folderId?})` → `{jobIds}` —
-  native TUS upload (Android: WorkManager + foreground notification +
-  tus-java-client; iOS: background `URLSession`), resumable, retries with
+  native TUS upload (Android: WorkManager + foreground notification + a
+  small OkHttp TUS client; iOS: background `URLSession`), resumable, retries with
   backoff, local notification on finish/failure.
 - `getUploads()` / `cancelUpload({jobId})` and event `uploadProgress`
   `{jobId, bytesSent, bytesTotal, state}`.
@@ -150,6 +150,16 @@ full version tag.
   `相簿備份/<device>` folder (Android: MediaStore observer + periodic
   WorkManager; iOS: PhotoKit change tracking + BGProcessingTask, best effort).
 - `registerPush()` → `{token}` (Android FCM; iOS returns local-only).
+- Additions (authoritative types and TSDoc in
+  `frontend/native-plugin/src/definitions.ts`): `configure` also takes
+  optional `deviceId`/`deviceName`; `getConfiguration`, `getNativeInfo`,
+  `pickFiles` (WebView file inputs cannot yield native URIs),
+  `clearFinishedUploads`, `clearSharedItems`, `runPhotoBackupNow`,
+  `checkPermissions`/`requestPermissions`, event `pushReceived`; Android-only
+  `canInstallPackages`, `openInstallPermissionSettings`, `installApkUpdate` +
+  event `apkDownloadProgress`. Rejections carry a `FileNexusErrorCode` `code`.
+- Live bundles: `web-bundle.json.minNativeVersion` is taken from
+  `frontend/package.json` → `filenexus.minNativeVersion`.
 
 Web UI integration (`frontend/src/native/`): `getPlatform()` returning
 `'web' | 'android' | 'ios' | 'desktop'`; a native-only Settings page (server
