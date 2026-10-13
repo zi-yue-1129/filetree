@@ -56,6 +56,9 @@ class SecurityConfig(BaseModel):
     secret_key: str = "your-secret-key-change-in-production"
     master_key: str = "pigstar"  # Default fallback, should be changed
     share_token_expiry_hours: int = 24
+    # bcrypt work factor for newly hashed passwords; 12 is bcrypt's own
+    # default. Existing hashes keep the cost encoded in them when verified.
+    bcrypt_rounds: int = Field(default=12, ge=4, le=31)
 
 
 class LogicConfig(BaseModel):
