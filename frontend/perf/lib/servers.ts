@@ -4,7 +4,7 @@
  * `vite preview` (proxying `/api` and `/ws` to that backend, like production).
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { preview, type PreviewServer } from 'vite';
@@ -135,6 +135,7 @@ export async function startStack(options: StackOptions): Promise<Stack> {
     });
   } catch (error: unknown) {
     await stopChild(backend);
+    rmSync(dataDir, { recursive: true, force: true });
     throw error;
   }
   const previewServer = server;
@@ -144,6 +145,8 @@ export async function startStack(options: StackOptions): Promise<Stack> {
     stop: async () => {
       await previewServer.close();
       await stopChild(backend);
+      // The seeded data set is throw-away (each run seeds a fresh one).
+      rmSync(dataDir, { recursive: true, force: true });
     },
   };
 }
