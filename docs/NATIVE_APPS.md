@@ -97,6 +97,40 @@ revocable, owner-scoped (same rights as a session token).
 - iOS/desktop have no remote push: they show local notifications from the
   existing per-user WebSocket (`/api/ws/{username}?token=`) while running.
 
+### 3.1 Backend performance and cache behavior
+
+- Existing dashboard fields (`user`, `usage`, `files`, `urls`, `folders`) and
+  listing semantics are unchanged. JSON API payloads of at least 1 KiB negotiate
+  gzip via `Accept-Encoding`, with `Vary: Accept-Encoding`. Downloads, folder/
+  batch archives, thumbnails, uploads and all TUS traffic are excluded. Native
+  HTTP stacks normally decompress gzip automatically; clients opting out can
+  request `Accept-Encoding: identity`. No dashboard pagination or 304 was added.
+- Thumbnail GETs return an `ETag`. Existing URLs use `Cache-Control: private,
+  no-cache`, allowing storage with revalidation. Send `If-None-Match` to receive
+  an empty 304 when unchanged; account/file/folder/share/device authorization is
+  rechecked first. A denied credential still receives 403, including with a
+  matching validator. Changes to the source mtime/size invalidate the cache.
+- Optional `GET /api/thumbnail/{username}/{filename}?version=<identity>` enables
+  `Cache-Control: private, max-age=31536000, immutable` only when `identity` equals
+  the current ETag without its quotes. A missing/stale version revalidates.
+  Use this for app-managed private caches and clear them on logout/account
+  changes. ETag, Cache-Control, Content-Range and Accept-Ranges are exposed to
+  cross-origin fetch clients. Server thumbnail generation is coalesced and
+  bounded by `LOGIC__THUMBNAIL_WORKERS` (default 2; range 1–16).
+- `push.debounce_seconds` / `PUSH__DEBOUNCE_SECONDS` configures the positive
+  per-user push window (default 30 seconds). Tests set 0.02 seconds through
+  configuration; pending batches remain process-local and cancel on shutdown.
+- TUS accepts the same create/PATCH/HEAD/DELETE contract and streams incoming
+  PATCH bodies. `Content-Length` must match received bytes and fit the remaining
+  upload. Incomplete/disconnected chunks do not advance the persisted offset
+  or retain partial bytes. Simultaneous PATCHes to one upload serialize; a stale
+  offset receives 409. Metadata uses explicit aware UTC text while old naive
+  timestamp records continue to load and expire correctly.
+- Keep one uvicorn worker: tokens, WebSocket subscribers and debounce batches
+  remain in memory. Worker processes require shared state before deployment.
+  [Backend benchmark evidence](../backend/perf/REPORT.md) includes before/after
+  medians and deliberate follow-ups.
+
 ## 4. Update channels (GitHub Release assets)
 
 Clients fetch from

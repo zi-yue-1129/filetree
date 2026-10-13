@@ -1,6 +1,5 @@
 """Seed deterministic FileNexus workloads without touching production storage."""
 
-import asyncio
 import io
 import os
 import random
