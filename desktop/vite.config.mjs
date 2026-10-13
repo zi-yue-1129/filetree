@@ -1,9 +1,9 @@
 /** Reuse the web build and add a synchronous, native-only server origin override. */
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const requireFrontend = createRequire(new URL('../frontend/package.json', import.meta.url));
-const { mergeConfig } = await import(requireFrontend.resolve('vite'));
+const { mergeConfig } = await import(pathToFileURL(requireFrontend.resolve('vite')).href);
 // Vite loads this TypeScript import while bundling the configuration.
 const { default: sharedConfig } = await import('../frontend/vite.config.ts');
 
