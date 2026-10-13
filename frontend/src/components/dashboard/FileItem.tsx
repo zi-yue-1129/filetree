@@ -132,7 +132,8 @@ interface FileItemProps {
   
   // Actions
   onShare: (filename: string) => void;
-  onQrCode: (url: string) => void;
+  /** Show a QR code for a share link to this file (receives the filename). */
+  onQrCode: (filename: string) => void;
   onDelete: (filename: string) => void;
   onRename?: (oldName: string, newName: string) => Promise<boolean>;
   onToggleLock: (type: 'file', id: string, currentStatus: boolean) => void;
@@ -221,8 +222,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
       label: 'QR Code',
       icon: <QrCode className="w-4 h-4 text-violet-500" />,
       onClick: () => {
-        const url = `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
-        onQrCode(url);
+        onQrCode(file.name);
       },
       hidden: isLocked
     },
@@ -409,8 +409,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const url = `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
-                    onQrCode(url);
+                    onQrCode(file.name);
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
                   onMouseUp={(e) => e.stopPropagation()}
@@ -611,8 +610,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const url = `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
-              onQrCode(url);
+              onQrCode(file.name);
             }}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
