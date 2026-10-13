@@ -37,10 +37,15 @@ Pages → Create project → Connect to Git,設定:
 
 | 欄位 | 值 |
 | --- | --- |
-| Root directory | `frontend` |
-| Build command | `npm ci && npm run build` |
-| Build output directory | `../static/dist` |
+| Production branch | `master` |
+| Root directory | (留空,repo 根目錄) |
+| Build command | `cd frontend && npm ci && npm run build` |
+| Build output directory | `static/dist` |
 | 環境變數 `VITE_API_BASE_URL` | `https://api.example.com`(結尾不加 `/`) |
+| 環境變數 `NODE_VERSION` | `22` |
+
+Vite 的輸出目錄是 repo 根目錄下的 `static/dist`(見 `frontend/vite.config.ts`),所以
+Root directory 要留在 repo 根目錄;若設成 `frontend`,輸出目錄會落在 root 之外。
 
 `frontend/public/_redirects` 已提供 SPA 路由 fallback。`VITE_API_BASE_URL` 於建置時寫入,
 變更後需重新部署。本機開發不需設定,Vite proxy 仍轉發到 `localhost:5168`。
