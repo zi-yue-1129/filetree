@@ -190,10 +190,13 @@ async def serve_spa(request: Request, path: str):
         # We'll implement a proper download route later if needed
         pass
 
-    # Try to see if the file exists in static_dir
-    file_path = static_path / path
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
+    # Serve a real file only if it resolves inside static_dir; this blocks
+    # traversal via encoded "../" segments or absolute paths (e.g. "%2Fetc").
+    if "\x00" not in path:
+        static_root = static_path.resolve()
+        file_path = (static_root / path.lstrip("/")).resolve()
+        if file_path.is_relative_to(static_root) and file_path.is_file():
+            return FileResponse(file_path)
     
     # Otherwise, return index.html for SPA routing
     # IMPORTANT: no-cache for index.html to prevent stale JS bundle references

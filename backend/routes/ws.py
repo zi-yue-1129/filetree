@@ -29,8 +29,7 @@ async def websocket_endpoint(
             await websocket.close(code=4001, reason="Authentication required")
             return
         
-        info = token_service.validate_token(token)
-        if not info or info.username != username:
+        if not token_service.is_owner_token(token, username):
             await websocket.close(code=4003, reason="Invalid token")
             return
     

@@ -632,6 +632,60 @@ class UserService:
 
         return path
 
+    @staticmethod
+    def folder_path_names_from_map(
+        folders_by_id: Dict[str, dict], folder_id: Optional[str]
+    ) -> List[str]:
+        """Resolve a folder's path from preloaded folders, without DB queries.
+
+        Mirrors ``get_folder_path_names`` for callers that resolve many
+        folders at once (see ``get_folders_by_username``).
+
+        Args:
+            folders_by_id: Folder dicts keyed by folder ID.
+            folder_id: The folder ID to resolve.
+
+        Returns:
+            List of folder names from root to target.
+        """
+        path: List[str] = []
+        current_id = folder_id
+        for _ in range(50):  # Max depth safety
+            folder = folders_by_id.get(current_id) if current_id else None
+            if folder is None:
+                break
+            path.insert(0, folder["name"])
+            current_id = folder["parent_id"]
+        return path
+
+    @staticmethod
+    def is_folder_chain_locked(
+        folders_by_id: Dict[str, dict], folder_id: Optional[str]
+    ) -> bool:
+        """Check whether a folder or any of its ancestors is locked.
+
+        Walks ``parent_id`` links in preloaded folder data (no DB queries),
+        bounded to the same max depth as ``get_folder_path_names``.
+
+        Args:
+            folders_by_id: Folder dicts keyed by folder ID, as returned by
+                ``get_folders_by_username``.
+            folder_id: The folder to start from. ``None`` means the root,
+                which cannot be locked.
+
+        Returns:
+            True if the folder or any ancestor has ``is_locked`` set.
+        """
+        current_id = folder_id
+        for _ in range(50):  # Max depth safety
+            folder = folders_by_id.get(current_id) if current_id else None
+            if folder is None:
+                return False
+            if folder["is_locked"]:
+                return True
+            current_id = folder["parent_id"]
+        return False
+
     async def get_folder_by_id(self, folder_id: str) -> Optional[dict]:
         """Fetch a single folder by ID.
 

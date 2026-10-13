@@ -22,9 +22,22 @@ def get_current_user_token(authorization: str = Header(None)) -> str:
 
 
 def verify_ownership(token: str, target_username: str) -> bool:
-    """Verify that the token allows access to the target username."""
-    info = token_service.validate_token(token)
-    if not info or info.username != target_username:
+    """Verify that the token is an owner (session/access) token for a user.
+
+    Share tokens are single-file capabilities and never prove ownership.
+
+    Args:
+        token: The bearer token to check.
+        target_username: The account the caller wants to act on.
+
+    Returns:
+        True if the token is a valid owner token for ``target_username``.
+
+    Raises:
+        HTTPException: 403 if the token is invalid, expired, a share token,
+            or issued to a different user.
+    """
+    if not token_service.is_owner_token(token, target_username):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: You do not own this resource",

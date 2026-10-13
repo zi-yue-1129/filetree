@@ -100,6 +100,8 @@ async def _open_connection(db_path: Path) -> aiosqlite.Connection:
     conn.row_factory = aiosqlite.Row
     await conn.execute("PRAGMA journal_mode=WAL")
     await conn.execute("PRAGMA foreign_keys=ON")
+    # Wait up to 15s for a competing writer instead of raising "database is locked".
+    await conn.execute("PRAGMA busy_timeout=15000")
     return conn
 
 
