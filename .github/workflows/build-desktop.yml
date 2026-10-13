@@ -1,0 +1,137 @@
+name: Build desktop
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release SemVer without v; the caller creates the release
+        required: true
+        type: string
+    secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: true
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
+  workflow_dispatch:
+  push:
+    branches: [feat/native-desktop]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/build-desktop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Desktop (${{ matrix.platform }})
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            args: --bundles nsis,msi
+          - os: macos-latest
+            platform: macos
+            args: --target universal-apple-darwin --bundles app,dmg
+          - os: ubuntu-22.04
+            platform: linux
+            args: --bundles deb,appimage
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
+      DESKTOP_RELEASE: ${{ inputs.version != '' }}
+      CONFIGURED_API_URL: ${{ vars.VITE_API_BASE_URL }}
+      TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+      npm_config_cache: ${{ github.workspace }}/.npm-cache
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '22.22.0'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install Linux native dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          timeout 180s sudo apt-get update
+          timeout 300s sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install Rust
+        run: |
+          timeout 180s rustup toolchain install 1.90.0 --profile minimal --component rustfmt
+          timeout 30s rustup default 1.90.0
+          if [[ '${{ matrix.platform }}' == 'macos' ]]; then
+            timeout 180s rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          fi
+      - name: Install desktop dependencies
+        run: timeout 180s npm --prefix desktop ci
+      - name: Validate build configuration
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: timeout 30s python desktop/scripts/prepare.py
+      - name: Check desktop source
+        run: |
+          timeout 30s npm --prefix desktop run check
+          timeout 30s npm --prefix desktop test
+          timeout 30s cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check
+      - name: Build installers
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+          args: ${{ matrix.args }} --config src-tauri/ci.conf.json --locked
+          includeUpdaterJson: false
+          retryAttempts: 0
+      - name: Collect bundles and signed updater metadata
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          signing_args=()
+          if [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]; then signing_args+=(--signed); fi
+          timeout 60s python desktop/scripts/release.py collect \
+            --source desktop/src-tauri/target --output desktop/artifacts \
+            --version "$DESKTOP_VERSION" --platform '${{ matrix.platform }}' "${signing_args[@]}"
+      - uses: actions/upload-artifact@v4.6.2
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: desktop/artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish desktop release assets
+    if: inputs.version != ''
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: zi-yue-1129/filetree
+      DESKTOP_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          pattern: desktop-*
+          path: desktop/artifacts
+          merge-multiple: true
+      - name: Read existing release and merge updater manifests
+        run: |
+          timeout 30s gh release view "v$DESKTOP_VERSION" --json body --jq .body > desktop/release-notes.txt
+          timeout 30s python3 desktop/scripts/release.py merge \
+            --source desktop/artifacts --output desktop/artifacts/latest.json \
+            --version "$DESKTOP_VERSION" --notes desktop/release-notes.txt
+      - name: Upload bundles first and updater manifest last
+        run: |
+          mapfile -d '' bundles < <(find desktop/artifacts -maxdepth 1 -type f ! -name 'latest*.json' -print0)
+          timeout 300s gh release upload "v$DESKTOP_VERSION" "${bundles[@]}" --clobber
+          timeout 60s gh release upload "v$DESKTOP_VERSION" desktop/artifacts/latest.json --clobber

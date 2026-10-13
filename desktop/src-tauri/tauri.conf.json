@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FileNexus",
+  "version": "0.1.0",
+  "identifier": "cc.spkuan.filenexus",
+  "build": {
+    "beforeBuildCommand": "npm run prepare:frontend",
+    "beforeDevCommand": "npm run prepare:frontend",
+    "frontendDist": "../../static/dist"
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "title": "FileNexus",
+      "width": 1200,
+      "height": 800,
+      "minWidth": 640,
+      "minHeight": 480,
+      "create": false,
+      "dragDropEnabled": false
+    }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "category": "Utility",
+    "shortDescription": "FileNexus file sharing desktop client",
+    "macOS": { "minimumSystemVersion": "11.0" },
+    "windows": { "nsis": { "installMode": "currentUser" } }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": ["https://github.com/zi-yue-1129/filetree/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  }
+}
