@@ -57,6 +57,12 @@ const CustomScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
 );
 CustomScroller.displayName = 'CustomScroller';
 
+/**
+ * Rows rendered on the first pass, before Virtuoso has measured the viewport
+ * (saves a measure-then-render round trip on slow devices).
+ */
+const INITIAL_RENDERED_FILES = 12;
+
 /** Data handed to the Virtuoso header through its `context` prop. */
 interface FileListContext {
   folders: React.ReactNode;
@@ -365,6 +371,7 @@ export const FileView: React.FC<FileViewProps> = ({
                 data={files}
                 totalCount={files.length}
                 overscan={200}
+                initialItemCount={Math.min(files.length, INITIAL_RENDERED_FILES)}
                 components={gridComponents}
                 context={listContext}
                 itemContent={renderFileItem}
@@ -375,6 +382,7 @@ export const FileView: React.FC<FileViewProps> = ({
                 data={files}
                 totalCount={files.length}
                 overscan={200}
+                initialItemCount={Math.min(files.length, INITIAL_RENDERED_FILES)}
                 components={listComponents}
                 context={listContext}
                 itemContent={renderFileItem}
