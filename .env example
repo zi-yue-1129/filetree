@@ -9,6 +9,14 @@ SECURITY__SECRET_KEY="SECURITY__SECRET_KEY"
 # desktop). Removing the app origins breaks every native app.
 SERVER__CORS_ORIGINS='["https://filenexus.pages.dev","https://localhost","capacitor://localhost","tauri://localhost","http://tauri.localhost"]'
 
+# DATA LOCATION (host path mounted at /app/data; default ./data)
+# Point this at an existing data directory, e.g. on another disk. It must
+# contain users.db, files.db, notes.db and uploads/ (same layout as ./data).
+# DATA_DIR=/mnt/storage/filetree-data
+# Host user/group that owns DATA_DIR (output of `id -u` / `id -g`).
+# PUID=1000
+# PGID=1000
+
 # CLOUDFLARE TUNNEL (only for `docker compose --profile tunnel up -d`)
 # In the tunnel's public hostname, point the service to http://backend:5168
 TUNNEL_TOKEN=""

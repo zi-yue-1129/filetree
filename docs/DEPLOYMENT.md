@@ -22,7 +22,10 @@ docker compose --profile tunnel up -d           # 同時啟動 cloudflared
   App 的來源** `https://localhost`(Android)、`capacitor://localhost`(iOS)、
   `tauri://localhost`(macOS/Linux 桌面)、`http://tauri.localhost`(Windows 桌面),
   否則所有 App 都會被 CORS 擋下。範例見 `.env example`。
-- 資料(資料庫、上傳檔案、TUS 暫存)全部在 `./data`,請定期備份。
+- 資料(資料庫、上傳檔案、TUS 暫存)預設在 `./data`,請定期備份。
+- 資料放在別的硬碟時,在 `.env` 設 `DATA_DIR=/掛載點/路徑`(該目錄內要有
+  `users.db`、`files.db`、`notes.db`、`uploads/`),並把 `PUID`/`PGID` 設成該目錄
+  擁有者的 `id -u`/`id -g`,不需要搬移資料。
 - Image 以 `--proxy-headers` 啟動,TUS 的 `Location` 會正確使用 `https://api.example.com`。
 
 ### Cloudflare Tunnel
@@ -37,10 +40,15 @@ Pages → Create project → Connect to Git,設定:
 
 | 欄位 | 值 |
 | --- | --- |
-| Root directory | `frontend` |
-| Build command | `npm ci && npm run build` |
-| Build output directory | `../static/dist` |
+| Production branch | `master` |
+| Root directory | (留空,repo 根目錄) |
+| Build command | `cd frontend && npm ci && npm run build` |
+| Build output directory | `static/dist` |
 | 環境變數 `VITE_API_BASE_URL` | `https://api.example.com`(結尾不加 `/`) |
+| 環境變數 `NODE_VERSION` | `22` |
+
+Vite 的輸出目錄是 repo 根目錄下的 `static/dist`(見 `frontend/vite.config.ts`),所以
+Root directory 要留在 repo 根目錄;若設成 `frontend`,輸出目錄會落在 root 之外。
 
 `frontend/public/_redirects` 已提供 SPA 路由 fallback。`VITE_API_BASE_URL` 於建置時寫入,
 變更後需重新部署。本機開發不需設定,Vite proxy 仍轉發到 `localhost:5168`。
