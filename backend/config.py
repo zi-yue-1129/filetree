@@ -78,6 +78,8 @@ class RateLimitConfig(BaseModel):
     upload_limit: str = "50/minute"
     default_limit: str = "60/minute"
     tus_limit: str = "3000/minute"
+    # Per-client uncached password scans (each bcrypt-checks every user).
+    password_scan_limit: str = "10/minute"
 
 
 

@@ -1,11 +1,12 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Form, Request
+from slowapi.util import get_remote_address
 from backend.services.user_service import user_service
 from backend.services.token_service import token_service
 from backend.services.audit_service import AuditService
 from backend.schemas import UnlockRequest
-from backend.core.auth import verify_password
 from backend.core.rate_limit import limiter, LOGIN_LIMIT
+from backend.services.password_lookup import verify_password_async
 from backend.core.utils import get_client_ip
 from backend.config import settings
 import os
@@ -19,8 +20,21 @@ audit_service = AuditService(os.path.join(settings.paths.user_info_file.parent, 
 @router.post("/login")
 @limiter.limit(LOGIN_LIMIT)
 async def login(request: Request, password: str = Form(...)):
-    """Verify password and return the associated user with a session token."""
-    user = await user_service.get_user_by_password(password)
+    """Verify password and return the associated user with a session token.
+
+    Args:
+        request: Incoming HTTP request (rate-limit and audit identity).
+        password: The account password; it alone identifies the user.
+
+    Returns:
+        Safe user fields plus a new session token.
+
+    Raises:
+        HTTPException: 401 for a wrong password, 429 when rate limited.
+    """
+    user = await user_service.get_user_by_password(
+        password, client_key=get_remote_address(request)
+    )
     if not user:
         await audit_service.log_event(
             "system", "LOGIN_FAILURE",
@@ -52,8 +66,22 @@ async def login(request: Request, password: str = Form(...)):
 
 
 @router.post("/user/{username}/unlock")
-async def unlock_user(username: str, password: str = Form(None)):
-    """Verify password for unlocking the dashboard and return a session token."""
+@limiter.limit(LOGIN_LIMIT)
+async def unlock_user(request: Request, username: str, password: str = Form(None)):
+    """Verify password for unlocking the dashboard and return a session token.
+
+    Args:
+        request: Incoming HTTP request (rate-limit identity).
+        username: Account whose dashboard is being unlocked.
+        password: That account's password.
+
+    Returns:
+        Safe user fields plus a new session token.
+
+    Raises:
+        HTTPException: 422 without a password, 404 for an unknown user,
+            401 for a wrong password, 429 when rate limited.
+    """
     if not password:
         raise HTTPException(status_code=422, detail="Password is required")
 
@@ -61,7 +89,7 @@ async def unlock_user(username: str, password: str = Form(None)):
     if not user:
         raise HTTPException(status_code=404, detail="使用者不存在")
 
-    if not verify_password(password, user["salt"], user["hashed_password"]):
+    if not await verify_password_async(password, user["salt"], user["hashed_password"]):
         raise HTTPException(status_code=401, detail="密碼驗證失敗")
 
     # SECURE: Transition to session token

@@ -6,12 +6,34 @@ Replaces JSON-based storage with aiosqlite queries for users and folders.
 
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import defaultdict
 
 from backend.config import settings
-from backend.core.auth import generate_salt, hash_password, verify_password
+from backend.core.auth import generate_salt
+from backend.core.rate_limit import password_scan_budget
 from backend.services.database import get_users_db
+from backend.services.password_lookup import (
+    StoredCredential,
+    credentials_digest,
+    find_first_matching_credential,
+    hash_password_async,
+    password_lookup_cache,
+)
+
+
+def _credential_from_row(row: Any) -> StoredCredential:
+    """Convert a ``users`` row with id/salt/hash columns to a credential.
+
+    Args:
+        row: A sqlite row exposing ``id``, ``salt`` and ``hashed_password``.
+
+    Returns:
+        The stored credential.
+    """
+    return StoredCredential(
+        user_id=row["id"], salt=row["salt"], hashed_password=row["hashed_password"]
+    )
 
 
 class UserService:
@@ -45,27 +67,85 @@ class UserService:
         user["folders"] = await self._get_user_folders(user["id"])
         return user
 
-    async def get_user_by_password(self, password: str) -> Optional[dict]:
-        """Authenticate a user by password.
+    async def get_user_by_password(
+        self, password: str, client_key: Optional[str] = None
+    ) -> Optional[dict]:
+        """Authenticate a user by password alone.
+
+        The result is the user with the lowest ``id`` whose bcrypt hash matches
+        (the same row a sequential ``SELECT * FROM users`` scan finds first).
+        Repeat lookups of a password that already matched are answered from the
+        in-memory cache without bcrypt work, as long as every row with
+        ``id <=`` the cached user's id is unchanged; otherwise the cache entry
+        is dropped and a full scan runs. Uncached scans are bcrypt-checked off
+        the event loop and charged to ``client_key``'s scan budget.
 
         Args:
             password: The plain text password.
+            client_key: Client identity for the per-client scan budget, or None
+                for internal callers that are not driven by client input.
 
         Returns:
             The user dict if authenticated, None otherwise.
+
+        Raises:
+            PasswordScanLimitExceeded: If ``client_key`` has exhausted its
+                budget of uncached scans.
         """
         db = await get_users_db()
-        cursor = await db.execute("SELECT * FROM users")
-        rows = await cursor.fetchall()
-        for row in rows:
-            user = dict(row)
-            if verify_password(password, user["salt"], user["hashed_password"]):
-                user["is_locked"] = bool(user["is_locked"])
-                user["first_login"] = bool(user["first_login"])
-                user["show_in_list"] = bool(user["show_in_list"])
-                user["folders"] = await self._get_user_folders(user["id"])
-                return user
-        return None
+
+        cached = password_lookup_cache.get(password)
+        if cached is not None:
+            cursor = await db.execute(
+                "SELECT id, salt, hashed_password FROM users WHERE id <= ? ORDER BY id",
+                (cached.user_id,),
+            )
+            prefix = [_credential_from_row(row) for row in await cursor.fetchall()]
+            if (
+                prefix
+                and prefix[-1].user_id == cached.user_id
+                and credentials_digest(prefix) == cached.prefix_digest
+            ):
+                return await self._get_user_by_id(cached.user_id)
+            password_lookup_cache.discard(password)
+
+        if client_key is not None:
+            password_scan_budget.consume(client_key)
+
+        # ORDER BY id reproduces the rowid order of the former unordered scan.
+        cursor = await db.execute(
+            "SELECT id, salt, hashed_password FROM users ORDER BY id"
+        )
+        credentials = [_credential_from_row(row) for row in await cursor.fetchall()]
+        match_index = await find_first_matching_credential(password, credentials)
+        if match_index is None:
+            return None
+        matched = credentials[match_index]
+        password_lookup_cache.put(
+            password, matched.user_id, credentials_digest(credentials[: match_index + 1])
+        )
+        return await self._get_user_by_id(matched.user_id)
+
+    async def _get_user_by_id(self, user_id: int) -> Optional[dict]:
+        """Fetch a full user row (with folders) by primary key.
+
+        Args:
+            user_id: The user's DB ID.
+
+        Returns:
+            A dict with all user fields if found, None otherwise.
+        """
+        db = await get_users_db()
+        cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        user = dict(row)
+        user["is_locked"] = bool(user["is_locked"])
+        user["first_login"] = bool(user["first_login"])
+        user["show_in_list"] = bool(user["show_in_list"])
+        user["folders"] = await self._get_user_folders(user["id"])
+        return user
 
     async def create_user(
         self,
@@ -84,7 +164,7 @@ class UserService:
             The created user dict.
         """
         salt = generate_salt()
-        hashed_pw = hash_password(password, salt)
+        hashed_pw = await hash_password_async(password, salt)
         folder = folder or username
 
         db = await get_users_db()
@@ -280,7 +360,7 @@ class UserService:
             True if successful, False if user not found.
         """
         salt = generate_salt()
-        hashed_pw = hash_password(new_password, salt)
+        hashed_pw = await hash_password_async(new_password, salt)
         db = await get_users_db()
         cursor = await db.execute(
             "UPDATE users SET salt = ?, hashed_password = ?, first_login = 1 "
@@ -288,6 +368,9 @@ class UserService:
             (salt, hashed_pw, username),
         )
         await db.commit()
+        # Entries are also self-invalidating (prefix digest), but drop them
+        # eagerly so an old password's fingerprint does not linger in memory.
+        password_lookup_cache.clear()
         return cursor.rowcount > 0
 
     async def delete_user(self, username: str) -> bool:
@@ -314,6 +397,7 @@ class UserService:
         await db.execute("DELETE FROM folders WHERE user_id = ?", (user_id,))
         await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         await db.commit()
+        password_lookup_cache.clear()
 
         # Clean up physical storage
         if folder:

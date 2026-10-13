@@ -16,6 +16,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.background import BackgroundTask
+from slowapi.util import get_remote_address
 
 from backend.config import settings
 from backend.core.auth import (
@@ -136,7 +137,9 @@ async def upload_files(
     token = extract_bearer_token(authorization) or token
     user = None
     if password:
-        user = await user_service.get_user_by_password(password)
+        user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
     elif token:
         owner = await token_service.resolve_owner_username(token)
         if owner:
@@ -203,7 +206,9 @@ async def upload_url(
     token = extract_bearer_token(authorization) or token
     user = None
     if password:
-        user = await user_service.get_user_by_password(password)
+        user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
     elif token:
         owner = await token_service.resolve_owner_username(token)
         if owner:
@@ -262,7 +267,9 @@ async def delete_file(
         auth_success = True
 
     if not auth_success and password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 
@@ -336,7 +343,9 @@ async def rename_file(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 
@@ -651,7 +660,9 @@ async def batch_action(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif data.password:
-        p_user = await user_service.get_user_by_password(data.password)
+        p_user = await user_service.get_user_by_password(
+            data.password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 
@@ -714,6 +725,7 @@ async def batch_action(
 
 @router.post("/user/{username}/batch-download")
 async def batch_download(
+    request: Request,
     username: str,
     filenames: List[str] = Form(...),
     password: Optional[str] = Form(None),
@@ -723,6 +735,7 @@ async def batch_download(
     """Download multiple files as a zip archive.
 
     Args:
+        request: Incoming HTTP request.
         username: Target account username.
         filenames: File names to include in the archive.
         password: Optional account password.
@@ -742,7 +755,9 @@ async def batch_download(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 

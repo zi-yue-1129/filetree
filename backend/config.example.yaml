@@ -35,3 +35,5 @@ rate_limit:
   upload_limit: "50/minute"
   default_limit: "60/minute"
   tus_limit: "3000/minute"
+  # Uncached password-only lookups per client (each bcrypt-checks every user).
+  password_scan_limit: "10/minute"

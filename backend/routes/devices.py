@@ -5,6 +5,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError, field_validator
+from slowapi.util import get_remote_address
 
 from backend.config import settings
 from backend.core.auth import get_current_user_token
@@ -99,7 +100,9 @@ async def register_device(request: Request) -> dict[str, str]:
         raise HTTPException(
             status_code=422, detail="Invalid device registration"
         ) from error
-    user = await user_service.get_user_by_password(payload.password)
+    user = await user_service.get_user_by_password(
+        payload.password, client_key=get_remote_address(request)
+    )
     if user is None:
         await audit_service.log_event(
             "system",
