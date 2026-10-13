@@ -14,7 +14,10 @@ export interface ResultFile {
   runs: RunTable;
 }
 
-/** Metrics shown in tables, with their unit (`lower` = lower is better). */
+/**
+ * Metrics shown in tables. Raster-worker time and paint counts stay in the
+ * JSON only: headless Chromium composites in software here, so both read 0.
+ */
 export const METRIC_LABELS: Record<string, string> = {
   lcpMs: 'LCP (ms)',
   tbtMs: 'TBT, load+idle (ms)',
@@ -32,9 +35,7 @@ export const METRIC_LABELS: Record<string, string> = {
   idleMainBusyMsPerS: 'Idle: main thread busy (ms/s)',
   idleScriptingMsPerS: 'Idle: scripting (ms/s)',
   idlePaintingMsPerS: 'Idle: painting (ms/s)',
-  idleRasterMsPerS: 'Idle: raster workers (ms/s)',
   idleGpuMsPerS: 'Idle: GPU process busy (ms/s)',
-  idlePaintsPerS: 'Idle: paints per second',
   scrollFps: 'Scroll: FPS',
   scrollDroppedFrames: 'Scroll: dropped frames',
   scrollTbtMs: 'Scroll: TBT (ms)',
