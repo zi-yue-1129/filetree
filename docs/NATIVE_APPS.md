@@ -52,9 +52,30 @@ revocable, owner-scoped (same rights as a session token).
 
 - A device token is accepted everywhere an owner session token is accepted:
   `Authorization: Bearer`, form/query `token`, and TUS `Upload-Metadata` `token`
-  (via `token_service.is_owner_token` / `owner_username`).
+  (via async `token_service.resolves_owner` / `resolve_owner_username`).
 - TUS `Upload-Metadata` keys clients send: `filename`, `filetype`, `token`,
   optional `folder_id`, optional `relativePath`, optional `lastModified`.
+- Device registration accepts either JSON or form fields (including
+  `password`). `GET /api/devices` returns an array with `id`, `device_name`,
+  `platform`, `created_at`, `last_seen_at`, and `revoked_at` (including revoked
+  history); token hashes and push tokens are never returned. PATCH is limited
+  to that device's own credential; explicit `push_token: null` clears FCM
+  registration. DELETE also accepts the owner's legacy access token.
+- TUS validates `folder_id` as an owned file folder and imports into its physical
+  path (the account's storage folder may differ from its username).
+  `relativePath` includes the filename; its parent directories are sanitized
+  and created beneath `folder_id`, with traversal/empty segments rejected.
+  The destination participates in resume fingerprints; revoked devices, expired
+  sessions, and changed passwords cause a fresh session rather than returning
+  an unusable upload URL.
+  New TUS records keep
+  the originating device ID or a credential hash, never a plaintext password
+  or device token. HEAD/PATCH/DELETE recheck supplied Bearer/query/metadata
+  credentials. For existing Uppy compatibility, the upload URL remains a
+  continuation capability when no credential is supplied; its initiating
+  credential/device must still be valid, so revocation prevents continuation.
+- Backup folders normalize names using the same rules as ordinary folder
+  creation, reuse existing file folders, and reject conflicting URL folders.
 - Push: Firebase Cloud Messaging HTTP v1 for Android devices that registered a
   `push_token`. Enabled when env `PUSH__FCM_SERVICE_ACCOUNT_FILE` points to a
   service-account JSON; otherwise disabled with one startup warning. Events:
@@ -62,6 +83,17 @@ revocable, owner-scoped (same rights as a session token).
   debounced ~30 s per user; excludes the uploading device),
   `upload_failed` is client-local only. Payload data keys:
   `{type, username, count}`; notification title/body in zh-TW.
+- `push.fcm_service_account_file` maps to `PUSH__FCM_SERVICE_ACCOUNT_FILE`.
+  For Docker, store the JSON under the existing `./data` mount (for example
+  `./data/secrets/firebase-service-account.json`) and set the environment value
+  to `/app/data/secrets/firebase-service-account.json`. Keep the key out of Git.
+  OAuth and FCM HTTP requests have explicit 10-second timeouts. Invalid
+  configured credentials log an error and disable delivery. HTTP 404 or FCM
+  `UNREGISTERED` clears only the rejected registration token.
+- Push batches use a 30-second window per user in each backend process and count
+  files per recipient, excluding that recipient's own uploads. Pending batches
+  are in memory and are cancelled at shutdown. Use one backend process for a
+  single account-wide debounce window.
 - iOS/desktop have no remote push: they show local notifications from the
   existing per-user WebSocket (`/api/ws/{username}?token=`) while running.
 

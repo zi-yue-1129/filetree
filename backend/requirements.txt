@@ -11,3 +11,5 @@ boto3
 slowapi
 Pillow
 aiosqlite
+google-auth[cryptography]>=2.40.3
+httpx>=0.28.1

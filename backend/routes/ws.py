@@ -1,17 +1,20 @@
+"""Per-account WebSocket subscriptions with asynchronous owner authentication."""
+
 from typing import Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
 from backend.services.event_service import event_service
-from backend.services.user_service import user_service
 from backend.services.token_service import token_service
+from backend.services.user_service import user_service
 
 router = APIRouter()
 
+
 @router.websocket("/ws/{username}")
 async def websocket_endpoint(
-    websocket: WebSocket, 
-    username: str,
-    token: Optional[str] = Query(None)
-):
+    websocket: WebSocket, username: str, token: Optional[str] = Query(None)
+) -> None:
     """WebSocket bridge for real-time state synchronization."""
     # Authenticate: If provided, validate token
     # If not provided, we can still allow connection but maybe restrict what's sent.
@@ -22,17 +25,17 @@ async def websocket_endpoint(
         return
 
     # SECURE: Require token if the user exists and we want to prevent subscription leakage.
-    # Since REFRESH signals are relatively harmless, we could be lenient, 
+    # Since REFRESH signals are relatively harmless, we could be lenient,
     # but for a "Secure Auth" task, let's be strict if they are locked.
-    if user.get("is_locked", False):
+    if token or user.get("is_locked", False):
         if not token:
             await websocket.close(code=4001, reason="Authentication required")
             return
-        
-        if not token_service.is_owner_token(token, username):
+
+        if not await token_service.resolves_owner(token, username):
             await websocket.close(code=4003, reason="Invalid token")
             return
-    
+
     # Check if user exists
     user = await user_service.get_user_by_name(username)
     if not user:
@@ -48,6 +51,3 @@ async def websocket_endpoint(
         event_service.disconnect(username, websocket)
     except Exception:
         event_service.disconnect(username, websocket)
-
-
-
