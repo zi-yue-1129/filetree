@@ -30,10 +30,8 @@ async def get_user_dashboard(request: Request, username: str, authorization: str
 
     # Check authentication state via token
     is_authenticated = False
-    if session_token:
-        info = token_service.validate_token(session_token)
-        if info and info.username == username:
-            is_authenticated = True
+    if token_service.is_owner_token(session_token, username):
+        is_authenticated = True
 
     # Get folders with visibility logic (hides locked folders + descendants if unauth)
     visible_folders, hidden_folder_ids = await user_service.get_visible_folders_and_hidden_ids(
@@ -119,10 +117,8 @@ async def update_own_profile(
 
     # Authenticate
     auth_success = False
-    if session_token:
-        info = token_service.validate_token(session_token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(session_token, username):
+        auth_success = True
     elif password:
         if verify_password(password, user["salt"], user["hashed_password"]):
             auth_success = True
@@ -164,10 +160,8 @@ async def toggle_item_lock(
 
     # Authenticate
     auth_success = False
-    if session_token:
-        info = token_service.validate_token(session_token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(session_token, username):
+        auth_success = True
     elif password:
         if verify_password(password, user["salt"], user["hashed_password"]):
             auth_success = True

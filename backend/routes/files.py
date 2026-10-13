@@ -28,17 +28,25 @@ async def get_files(username: str, token: Optional[str] = None):
     if not user:
         raise HTTPException(status_code=404, detail="使用者不存在")
 
-    # Access control: If user is locked, require a valid token
+    is_authenticated = token_service.is_owner_token(token, username)
+
+    # Access control: If user is locked, require a valid owner token
     if user["is_locked"]:
         if not token:
             raise HTTPException(status_code=401, detail="此目錄已鎖定，請先解鎖")
-        info = token_service.validate_token(token)
-        if not info or info.username != username:
+        if not is_authenticated:
             raise HTTPException(status_code=403, detail="無效或過期的存取權杖")
 
+    # Same visibility rule as the dashboard: anonymous callers do not see locked
+    # files or anything inside a locked folder (or its descendants).
+    _, hidden_folder_ids = await user_service.get_visible_folders_and_hidden_ids(
+        user["id"], is_authenticated
+    )
     return await file_service.get_user_files(
         user["folder"],
         retention_days=user.get("data_retention_days"),
+        excluded_folder_ids=hidden_folder_ids,
+        include_locked=is_authenticated,
     )
 
 
@@ -56,9 +64,9 @@ async def upload_files(
     if password:
         user = await user_service.get_user_by_password(password)
     elif token:
-        info = token_service.validate_token(token)
-        if info:
-            user = await user_service.get_user_by_name(info.username)
+        owner = token_service.owner_username(token)
+        if owner:
+            user = await user_service.get_user_by_name(owner)
             
     if not user:
         raise HTTPException(status_code=401, detail="驗證失敗，請重新登入或驗證密碼")
@@ -103,9 +111,9 @@ async def upload_url(
     if password:
         user = await user_service.get_user_by_password(password)
     elif token:
-        info = token_service.validate_token(token)
-        if info:
-            user = await user_service.get_user_by_name(info.username)
+        owner = token_service.owner_username(token)
+        if owner:
+            user = await user_service.get_user_by_name(owner)
 
     if not user:
         raise HTTPException(status_code=401, detail="驗證失敗")
@@ -141,10 +149,8 @@ async def delete_file(
 
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     
     if not auth_success and password:
          p_user = await user_service.get_user_by_password(password)
@@ -200,10 +206,8 @@ async def rename_file(
 
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     elif password:
         p_user = await user_service.get_user_by_password(password)
         if p_user and p_user["username"] == username:
@@ -257,8 +261,7 @@ async def create_share(
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="此資源已被鎖定，請先解鎖")
-        info = token_service.validate_token(token)
-        if not info or info.username != username:
+        if not token_service.is_owner_token(token, username):
             raise HTTPException(status_code=403, detail="無效或過期的存取權杖")
 
     share_token = token_service.create_token(username, filename)
@@ -272,7 +275,7 @@ async def create_share(
 @router.get("/share-info/{token}", response_model=ShareInfo)
 async def get_share_info(token: str):
     """Retrieve info about a shared file."""
-    info = token_service.validate_token(token)
+    info = token_service.get_share_token(token)
     if not info:
         raise HTTPException(status_code=404, detail="分享連結已過期或無效")
 
@@ -318,7 +321,7 @@ async def get_share_info(token: str):
 @router.get("/download-shared/{token}")
 async def download_shared(token: str):
     """Download a file via a share token."""
-    info = token_service.validate_token(token)
+    info = token_service.get_share_token(token)
     if not info:
         raise HTTPException(status_code=404, detail="分享連結已過期或無效")
 
@@ -367,17 +370,9 @@ async def download_direct(
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="此資源已被鎖定，請先解鎖")
-        
-        info = token_service.validate_token(token)
-        if not info or info.username != username:
-            # Check share token (must match filename) OR session token (must match username)
-            is_valid_share = (info and info.token_type == 'share' 
-                            and info.filename == filename and info.username == username)
-            is_valid_session = (info and info.token_type == 'session' and info.username == username)
-            is_valid_access = (info and info.token_type == 'access' and info.username == username)
-
-            if not (is_valid_share or is_valid_session or is_valid_access):
-                raise HTTPException(status_code=403, detail="無效或過期的存取權杖")
+        # Owner tokens unlock every file; share tokens only their own file.
+        if not token_service.grants_file_access(token, username, filename):
+            raise HTTPException(status_code=403, detail="無效或過期的存取權杖")
 
     # Resolve physical path
     from backend.services.database import get_files_db
@@ -424,15 +419,9 @@ async def get_thumbnail(
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="Locked resource")
-        
-        info = token_service.validate_token(token)
-        if not info or info.username != username:
-            is_valid_share = (info and info.token_type == 'share' 
-                            and info.filename == filename and info.username == username)
-            is_valid_session = (info and info.token_type == 'session' and info.username == username)
-
-            if not (is_valid_share or is_valid_session):
-                raise HTTPException(status_code=403, detail="Invalid token")
+        # Owner tokens unlock every file; share tokens only their own file.
+        if not token_service.grants_file_access(token, username, filename):
+            raise HTTPException(status_code=403, detail="Invalid token")
 
     from backend.services.database import get_files_db
     db = await get_files_db()
@@ -475,10 +464,8 @@ async def create_folder(
 
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     elif password:
         p_user = await user_service.get_user_by_password(password)
         if p_user and p_user["username"] == username:
@@ -526,10 +513,8 @@ async def update_folder(
 
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     elif password:
         p_user = await user_service.get_user_by_password(password)
         if p_user and p_user["username"] == username:
@@ -572,10 +557,8 @@ async def delete_folder(
 
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     elif password:
         p_user = await user_service.get_user_by_password(password)
         if p_user and p_user["username"] == username:
@@ -616,10 +599,8 @@ async def move_item(
 
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     elif password:
         p_user = await user_service.get_user_by_password(password)
         if p_user and p_user["username"] == username:
@@ -702,10 +683,8 @@ async def batch_action(
 
     # Authenticate
     auth_success = False
-    if data.token:
-        info = token_service.validate_token(data.token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(data.token, username):
+        auth_success = True
     elif data.password:
         p_user = await user_service.get_user_by_password(data.password)
         if p_user and p_user["username"] == username:
@@ -777,10 +756,8 @@ async def batch_download(
     
     # Authenticate
     auth_success = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            auth_success = True
+    if token_service.is_owner_token(token, username):
+        auth_success = True
     elif password:
         p_user = await user_service.get_user_by_password(password)
         if p_user and p_user["username"] == username:
@@ -847,10 +824,8 @@ async def download_folder(
         raise HTTPException(status_code=404, detail="Folder not found")
 
     is_authenticated = False
-    if token:
-        info = token_service.validate_token(token)
-        if info and info.username == username:
-            is_authenticated = True
+    if token_service.is_owner_token(token, username):
+        is_authenticated = True
 
     if target_folder["is_locked"] and not is_authenticated:
         raise HTTPException(status_code=403, detail="Folder is locked")
@@ -875,7 +850,9 @@ async def download_folder(
                 raise HTTPException(status_code=403, detail="Contains locked content")
 
     # 3. Get all files and filter
-    files = await file_service.get_user_files(username, user.get("data_retention_days"))
+    files = await file_service.get_user_files(
+        user["folder"], user.get("data_retention_days")
+    )
     target_files = [f for f in files if f["folder_id"] in descendants]
     
     if not target_files:

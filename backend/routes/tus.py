@@ -132,9 +132,10 @@ async def create_tus_upload(
         # Authenticate
         user = None
         if token:
-            info = token_service.validate_token(token)
-            if info:
-                user = await user_service.get_user_by_name(info.username)
+            # Only owner (session/access) tokens may upload; share tokens may not.
+            owner = token_service.owner_username(token)
+            if owner:
+                user = await user_service.get_user_by_name(owner)
         
         if not user and password:
             user = await user_service.get_user_by_password(password)
