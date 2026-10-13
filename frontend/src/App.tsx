@@ -13,7 +13,7 @@ import { Sidebar } from './components/Sidebar';
 import { PublicDirectory } from './components/PublicDirectory';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { apiRequest } from './services/api';
+import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
 
 interface UserData {
@@ -226,9 +226,8 @@ const AppContent: React.FC = () => {
     fetchInit();
 
     // WebSocket for realtime user list updates
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Direct endpoint on app.py to bypass router issues
-    const wsUrl = `${protocol}//${window.location.host}/ws/global`;
+    const wsUrl = buildWsUrl('/ws/global');
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {

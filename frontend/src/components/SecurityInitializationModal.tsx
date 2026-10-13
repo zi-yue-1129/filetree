@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck } from 'lucide-react';
+import { apiUrl } from '../services/api';
 
 interface SecurityInitializationModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export const SecurityInitializationModal: React.FC<SecurityInitializationModalPr
       body.append('old_password', oldPassword);
       body.append('new_password', newKey);
 
-      const res = await fetch('/api/user/change-password', {
+      const res = await fetch(apiUrl('/api/user/change-password'), {
         method: 'POST',
         body
       });

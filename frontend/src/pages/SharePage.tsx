@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Download, FileText, Loader2, AlertCircle, Share2, Clock, HardDrive } from 'lucide-react';
 import { FilePreviewContent } from '../components/FilePreviewModal';
 import { cn } from '../lib/utils';
+import { apiUrl } from '../services/api';
 
 interface ShareInfo {
   username: string;
@@ -30,7 +31,7 @@ export const SharePage: React.FC = () => {
   useEffect(() => {
     const fetchShareInfo = async () => {
       try {
-        const res = await fetch(`/api/share-info/${token}`);
+        const res = await fetch(apiUrl(`/api/share-info/${token}`));
         if (!res.ok) {
           const data = await res.json();
           throw new Error(data.detail || '無法取得分享資訊');

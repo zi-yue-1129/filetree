@@ -2,7 +2,37 @@
  * Centralized API service for handling requests with authentication.
  */
 
-const API_BASE_URL = '/api';
+/**
+ * Origin of the backend API. Set `VITE_API_BASE_URL` (e.g. https://api.example.com)
+ * when the frontend is hosted separately (Cloudflare Pages). When unset it falls
+ * back to the page origin, which is what the Vite dev proxy and the
+ * backend-served SPA rely on.
+ */
+export const API_ORIGIN: string = (
+  import.meta.env.VITE_API_BASE_URL || window.location.origin
+).replace(/\/+$/, '');
+
+const API_BASE_URL = `${API_ORIGIN}/api`;
+
+/**
+ * Build an absolute backend URL.
+ *
+ * @param path - Path beginning with `/`, e.g. `/api/login`.
+ * @returns Absolute HTTP(S) URL on the backend origin.
+ */
+export function apiUrl(path: string): string {
+  return `${API_ORIGIN}${path}`;
+}
+
+/**
+ * Build an absolute backend WebSocket URL.
+ *
+ * @param path - Path beginning with `/`, e.g. `/ws/global`.
+ * @returns Absolute ws(s) URL on the backend origin.
+ */
+export function wsUrl(path: string): string {
+  return `${API_ORIGIN.replace(/^http/, 'ws')}${path}`;
+}
 
 interface RequestOptions extends RequestInit {
   token?: string | null;

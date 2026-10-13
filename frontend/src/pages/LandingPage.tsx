@@ -11,6 +11,7 @@ import Tus from '@uppy/tus';
 
 // Uppy styles
 import '@uppy/core/css/style.min.css';
+import { apiUrl } from '../services/api';
 
 interface LandingPageProps {
   data: {
@@ -63,7 +64,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
 
     try {
         u.use(Tus, {
-        endpoint: '/api/upload/tus',
+        endpoint: apiUrl('/api/upload/tus'),
         chunkSize: 5 * 1024 * 1024,
         retryDelays: [0, 1000, 3000, 5000],
         removeFingerprintOnSuccess: true,
@@ -229,7 +230,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
            const body = new FormData();
            body.append('url', note);
            body.append('password', password);
-           const res = await fetch('/api/upload_url', { method: 'POST', body });
+           const res = await fetch(apiUrl('/api/upload_url'), { method: 'POST', body });
            if (!res.ok) {
              const err = await res.json();
              throw new Error(`筆記上傳失敗: ${note} - ${err.detail}`);
@@ -240,7 +241,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
       // 3. Login & Redirect
       const body = new FormData();
       body.append('password', password);
-      const res = await fetch('/api/login', { method: 'POST', body });
+      const res = await fetch(apiUrl('/api/login'), { method: 'POST', body });
       
       if (res.ok) {
         const user = await res.json();

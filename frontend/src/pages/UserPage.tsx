@@ -5,7 +5,7 @@ import { SecurityInitializationModal } from '../components/SecurityInitializatio
 import { X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../lib/utils';
-import { apiRequest, apiPostForm } from '../services/api';
+import { apiRequest, apiPostForm, apiUrl, API_ORIGIN } from '../services/api';
 import { FilePreviewModal } from '../components/FilePreviewModal';
 import { FileView } from '../components/dashboard/FileView';
 import { UrlView } from '../components/dashboard/UrlView';
@@ -265,7 +265,7 @@ export const UserPage: React.FC<UserPageProps> = ({
 
         setIsPacking(true);
         try {
-          const res = await fetch(`/api/user/${dashboardData.user?.username}/batch-download`, {
+          const res = await fetch(apiUrl(`${API_ORIGIN}/api/user/${dashboardData.user?.username}/batch-download`), {
             method: 'POST',
             body: formData
           });
@@ -819,7 +819,7 @@ export const UserPage: React.FC<UserPageProps> = ({
                     alert('資料夾內無檔案可下載');
                     return;
                   }
-                  const downloadUrl = `/api/user/${dashboardData.user?.username}/folders/${folderId}/download?token=${token || ''}`;
+                  const downloadUrl = `${API_ORIGIN}/api/user/${dashboardData.user?.username}/folders/${folderId}/download?token=${token || ''}`;
                   window.open(downloadUrl, '_blank');
                 }}
                 onToggleFolderLock={(type, id, status) => toggleItemLock(type, id, !!status)}

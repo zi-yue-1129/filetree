@@ -28,6 +28,7 @@ import { setDragPreview, type DragItem } from '../../utils/dragUtils';
 import type { Folder } from './FolderSidebar';
 import { CascadingMenu } from '../ui/CascadingMenu';
 import { DropdownMenu } from '../ui/DropdownMenu';
+import { API_ORIGIN } from '../../services/api';
 
 export interface FileItemData {
   name: string;
@@ -192,7 +193,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
         onPreview({
           name: file.name,
           size: formatSize(file.size_bytes),
-          url: `/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`
+          url: `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`
         });
       }
     }
@@ -220,7 +221,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
       label: 'QR Code',
       icon: <QrCode className="w-4 h-4 text-violet-500" />,
       onClick: () => {
-        const url = `${window.location.origin}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
+        const url = `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
         onQrCode(url);
       },
       hidden: isLocked
@@ -230,7 +231,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
       icon: <Download className="w-4 h-4 text-green-500" />,
       onClick: () => {
         const a = document.createElement('a');
-        a.href = `/api/download/${username}/${file.name}${token ? `?token=${token}` : ''}`;
+        a.href = `${API_ORIGIN}/api/download/${username}/${file.name}${token ? `?token=${token}` : ''}`;
         a.click();
       },
       hidden: isLocked
@@ -268,7 +269,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
             onPreview({
               name: file.name,
               size: formatSize(file.size_bytes),
-              url: `/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`
+              url: `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`
             });
           }
         }}
@@ -408,7 +409,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const url = `${window.location.origin}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
+                    const url = `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
                     onQrCode(url);
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
@@ -421,7 +422,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                   <QrCode className="w-4 h-4" />
                 </button>
                 <a
-                  href={`/api/download/${username}/${file.name}${token ? `?token=${token}` : ''}`}
+                  href={`${API_ORIGIN}/api/download/${username}/${file.name}${token ? `?token=${token}` : ''}`}
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   onMouseUp={(e) => e.stopPropagation()}
@@ -509,7 +510,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
           onPreview({
             name: file.name,
             size: formatSize(file.size_bytes),
-            url: `/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`
+            url: `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`
           });
         }
       }}
@@ -573,7 +574,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
       <div className="relative w-full aspect-4/3 bg-gray-100/50 dark:bg-black/20 flex items-center justify-center overflow-hidden">
         {isDisplayable ? (
           <img
-            src={`/api/thumbnail/${username}/${encodeURIComponent(file.name)}?v=2${token ? `&token=${token}` : ''}`}
+            src={`${API_ORIGIN}/api/thumbnail/${username}/${encodeURIComponent(file.name)}?v=2${token ? `&token=${token}` : ''}`}
             alt={file.name}
             loading="lazy"
             className="w-full h-full object-cover"
@@ -610,7 +611,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const url = `${window.location.origin}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
+              const url = `${API_ORIGIN}/api/download/${username}/${encodeURIComponent(file.name)}${token ? `?token=${token}` : ''}`;
               onQrCode(url);
             }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -623,7 +624,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
             <QrCode className="w-4 h-4" />
           </button>
           <a
-            href={`/api/download/${username}/${file.name}${token ? `?token=${token}` : ''}`}
+            href={`${API_ORIGIN}/api/download/${username}/${file.name}${token ? `?token=${token}` : ''}`}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseUp={(e) => e.stopPropagation()}
