@@ -8,11 +8,34 @@
  * back to the page origin, which is what the Vite dev proxy and the
  * backend-served SPA rely on.
  */
-export const API_ORIGIN: string = (
+const DEFAULT_API_ORIGIN: string = (
   import.meta.env.VITE_API_BASE_URL || window.location.origin
 ).replace(/\/+$/, '');
 
-const API_BASE_URL = `${API_ORIGIN}/api`;
+/**
+ * Current backend origin. This is a live ES-module binding: the native apps
+ * may replace it once at startup (before rendering) with a user-configured
+ * server URL via {@link setApiOrigin}. The web build never changes it.
+ */
+export let API_ORIGIN: string = DEFAULT_API_ORIGIN;
+
+/**
+ * Override the backend origin (native apps only; call before rendering).
+ *
+ * @param origin - Absolute http(s) origin, or `null` to restore the build-time default.
+ */
+export function setApiOrigin(origin: string | null): void {
+  API_ORIGIN = origin ? origin.replace(/\/+$/, '') : DEFAULT_API_ORIGIN;
+}
+
+/**
+ * Build-time default backend origin (`VITE_API_BASE_URL` or the page origin).
+ *
+ * @returns Origin without trailing slash.
+ */
+export function getDefaultApiOrigin(): string {
+  return DEFAULT_API_ORIGIN;
+}
 
 /**
  * Build an absolute backend URL.
@@ -53,7 +76,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
+  const response = await fetch(`${API_ORIGIN}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
     ...rest,
     headers,
   });
@@ -75,7 +98,7 @@ export async function apiPostForm(endpoint: string, formData: FormData, token?: 
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
+  const response = await fetch(`${API_ORIGIN}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
     method: 'POST',
     body: formData,
     headers,
