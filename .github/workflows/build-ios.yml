@@ -1,0 +1,58 @@
+# Unsigned iOS distribution: SideStore supplies each user's free-account signature.
+name: build-ios
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version X.Y.Z without the leading v
+        required: true
+        type: string
+  workflow_dispatch:
+  push:
+    branches: [feat/native-ios]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ios-${{ inputs.version || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_APP_VERSION: ${{ inputs.version || '0.0.1' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build web, check TUS protocol, sync Capgo and archive without signing
+        run: python3 frontend/ios/ci/build.py build
+      - name: Exercise persisted TUS upload state machine on iOS simulator
+        run: python3 frontend/ios/ci/build.py test-uploads
+      - name: Package IPA and verify app plus extension executables
+        run: python3 frontend/ios/ci/build.py package
+      - name: Upload unsigned IPA and inspection report
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: FileNexus-ios-${{ inputs.version || '0.0.1' }}-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/filenexus-ios/*-unsigned.ipa
+            ${{ runner.temp }}/filenexus-ios/sidestore-source.json
+            ${{ runner.temp }}/filenexus-ios/ipa-contents.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload assets to existing draft release
+        if: inputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 frontend/ios/ci/build.py release

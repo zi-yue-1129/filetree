@@ -5,6 +5,46 @@
 	};
 	objectVersion = 60;
 	objects = {
+        F20000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../../native-plugin/ios/Sources/FileNexusNativePlugin/PhotoBackup.swift; sourceTree = SOURCE_ROOT; };
+        F20000000000000000000015 = {isa = PBXBuildFile; fileRef = F20000000000000000000014; };
+
+        F20000000000000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = UploadTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+        F20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadTests/UploadEngineTests.swift; sourceTree = SOURCE_ROOT; };
+        F20000000000000000000003 = {isa = PBXBuildFile; fileRef = F20000000000000000000002; };
+        F20000000000000000000004 = {isa = PBXBuildFile; fileRef = F10000000000000000000003; };
+        F20000000000000000000005 = {isa = PBXBuildFile; fileRef = F10000000000000000000004; };
+        F20000000000000000000006 = {isa = PBXBuildFile; fileRef = F10000000000000000000005; };
+        F20000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F20000000000000000000003, F20000000000000000000004, F20000000000000000000005, F20000000000000000000006, F20000000000000000000015, ); runOnlyForDeploymentPostprocessing = 0; };
+        F20000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        F20000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        F20000000000000000000010 = {isa = PBXNativeTarget; buildConfigurationList = F20000000000000000000011; buildPhases = (F20000000000000000000007, F20000000000000000000008, F20000000000000000000009, ); buildRules = (); dependencies = (); name = UploadTests; productName = UploadTests; productReference = F20000000000000000000001; productType = "com.apple.product-type.bundle.unit-test"; };
+        F20000000000000000000011 = {isa = XCConfigurationList; buildConfigurations = (F20000000000000000000012, F20000000000000000000013, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        F20000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; IPHONEOS_DEPLOYMENT_TARGET = 15.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks", ); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = cc.spkuan.filenexus.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
+        F20000000000000000000013 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; IPHONEOS_DEPLOYMENT_TARGET = 15.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks", ); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = cc.spkuan.filenexus.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
+
+
+        F10000000000000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+        F10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtension/ShareViewController.swift; sourceTree = SOURCE_ROOT; };
+        F10000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../../native-plugin/ios/Sources/FileNexusNativePlugin/NativeStorage.swift; sourceTree = SOURCE_ROOT; };
+        F10000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../../native-plugin/ios/Sources/FileNexusNativePlugin/TUSProtocol.swift; sourceTree = SOURCE_ROOT; };
+        F10000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../../native-plugin/ios/Sources/FileNexusNativePlugin/UploadEngine.swift; sourceTree = SOURCE_ROOT; };
+        F10000000000000000000006 = {isa = PBXBuildFile; fileRef = F10000000000000000000002; };
+        F10000000000000000000007 = {isa = PBXBuildFile; fileRef = F10000000000000000000003; };
+        F10000000000000000000008 = {isa = PBXBuildFile; fileRef = F10000000000000000000004; };
+        F10000000000000000000009 = {isa = PBXBuildFile; fileRef = F10000000000000000000005; };
+        F1000000000000000000000A = {isa = PBXBuildFile; fileRef = F10000000000000000000001; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+        F1000000000000000000000B = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F10000000000000000000006, F10000000000000000000007, F10000000000000000000008, F10000000000000000000009, ); runOnlyForDeploymentPostprocessing = 0; };
+        F1000000000000000000000C = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        F1000000000000000000000D = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        F1000000000000000000000E = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (F1000000000000000000000A, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+        F1000000000000000000000F = {isa = PBXContainerItemProxy; containerPortal = 504EC2FC1FED79650016851F; proxyType = 1; remoteGlobalIDString = F10000000000000000000010; remoteInfo = ShareExtension; };
+        F10000000000000000000011 = {isa = PBXTargetDependency; target = F10000000000000000000010; targetProxy = F1000000000000000000000F; };
+        F10000000000000000000010 = {isa = PBXNativeTarget; buildConfigurationList = F10000000000000000000012; buildPhases = (F1000000000000000000000B, F1000000000000000000000C, F1000000000000000000000D, ); buildRules = (); dependencies = (); name = ShareExtension; productName = ShareExtension; productReference = F10000000000000000000001; productType = "com.apple.product-type.app-extension"; };
+        F10000000000000000000012 = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000013, F10000000000000000000014, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        F10000000000000000000015 = {isa = PBXGroup; name = ShareExtension; children = (F10000000000000000000002, F10000000000000000000003, F10000000000000000000004, F10000000000000000000005, ); sourceTree = "<group>"; };
+        F10000000000000000000013 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; INFOPLIST_FILE = ShareExtension/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 15.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", ); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = cc.spkuan.filenexus.share; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
+        F10000000000000000000014 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; INFOPLIST_FILE = ShareExtension/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 15.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", ); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = cc.spkuan.filenexus.share; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
+
 
 /* Begin PBXBuildFile section */
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
@@ -49,6 +89,9 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+                F10000000000000000000015 /* ShareExtension */,
+                F20000000000000000000002 /* UploadTests */,
+                F20000000000000000000014 /* PhotoBackup */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -57,6 +100,8 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+                F10000000000000000000001 /* ShareExtension.appex */,
+                F20000000000000000000001 /* UploadTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,10 +132,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+                F1000000000000000000000E /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+                F10000000000000000000011,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -133,6 +180,8 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+                F10000000000000000000010 /* ShareExtension */,
+                F20000000000000000000010 /* UploadTests */,
 			);
 		};
 /* End PBXProject section */
