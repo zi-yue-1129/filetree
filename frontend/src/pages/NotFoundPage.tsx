@@ -46,8 +46,8 @@ export const NotFoundPage: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
 
             {/* Background Ambient */}
-            <div className="absolute top-1/4 -left-20 w-[60vw] h-[50vh] bg-violet-500/10 blur-[8rem] rounded-full -z-10 animate-pulse" />
-            <div className="absolute bottom-1/4 -right-20 w-[70vw] h-[60vh] bg-cyan-500/10 blur-[8rem] rounded-full -z-10 animate-pulse" style={{ animationDelay: '1s' }} />
+            <div className="absolute top-1/4 -left-20 w-[60vw] h-[50vh] fx-glow text-violet-500/10 -z-10" />
+            <div className="absolute bottom-1/4 -right-20 w-[70vw] h-[60vh] fx-glow text-cyan-500/10 -z-10" />
 
             <motion.div
                 initial={{ opacity: 0, y: 30, scale: 0.95 }}
