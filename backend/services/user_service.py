@@ -374,7 +374,7 @@ class UserService:
 
         hidden_ids = set()
         
-        def mark_hidden(fid: str):
+        def mark_hidden(fid: str) -> None:
             if fid in hidden_ids:
                 return
             hidden_ids.add(fid)

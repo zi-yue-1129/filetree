@@ -35,6 +35,7 @@ os.environ.update(
         "PATHS__NOTES_DB": str(_DATA / "notes.db"),
         "PATHS__FILES_DB": str(_DATA / "files.db"),
         "RATE_LIMIT__ENABLED": "false",
+        "PUSH__DEBOUNCE_SECONDS": "0.02",
     }
 )
 # TusMetadataStore resolves "data/tus_metadata.db" against the CWD.

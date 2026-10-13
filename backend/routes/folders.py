@@ -1,6 +1,8 @@
 """Owner-scoped folder management, item placement, and folder downloads."""
 
 import os
+from pathlib import Path
+from collections import defaultdict
 from typing import Any, Optional
 
 from fastapi import APIRouter, Form, Header, HTTPException
@@ -8,6 +10,7 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from backend.core.auth import extract_bearer_token
+from backend.services.archive_service import create_archive
 from backend.services.event_service import event_service
 from backend.services.file_service import file_service
 from backend.services.note_service import note_service
@@ -336,14 +339,18 @@ async def download_folder(
     folder_map = {f["id"]: f for f in all_folders}
 
     # 1. Identify all descendant folder IDs
+    children: dict[str, list[str]] = defaultdict(list)
+    for folder in all_folders:
+        if folder["parent_id"]:
+            children[folder["parent_id"]].append(folder["id"])
     descendants = set()
     stack = [folder_id]
     while stack:
         current_id = stack.pop()
+        if current_id in descendants:
+            continue
         descendants.add(current_id)
-        for f in all_folders:
-            if f["parent_id"] == current_id:
-                stack.append(f["id"])
+        stack.extend(children[current_id])
 
     # 2. Check locks in descendants if unauthenticated
     if not is_authenticated:
@@ -365,49 +372,15 @@ async def download_folder(
             if f["is_locked"]:
                 raise HTTPException(status_code=403, detail="Contains locked files")
 
-    # 4. Create Zip
-    import tempfile
-    import zipfile
-
-    temp_zip = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
-    temp_zip_path = temp_zip.name
-    temp_zip.close()
-
-    # Helper: resolve path from root
-    def get_path_from_root(fid: Optional[str]) -> list[str]:
-        """Resolve ancestor names for the folder archive path."""
-        path = []
-        curr = fid
-        while curr and curr in folder_map:
-            f = folder_map[curr]
-            path.insert(0, f["name"])
-            curr = f["parent_id"]
-        return path
-
-    target_root_path = get_path_from_root(folder_id)
-    # The number of path components to strip to make paths relative to the zip root
-    # e.g. target is "A/B". We want files in B to be at root of zip?
-    # Usually zip of "B" contains "B/file".
-    # If we want "B/...", we strip "A". Length of target_root_path is 2. Strip 1.
+    target_root_path = user_service.folder_path_names_from_map(folder_map, folder_id)
     strip_count = max(0, len(target_root_path) - 1)
-
-    with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file_info in target_files:
-            fname = file_info["name"]
-            fid = file_info["folder_id"]
-
-            # Physical path needs names from root
-            full_path_names = get_path_from_root(fid)
-
-            # Get physical path
-            folder_path = file_service._get_folder_path(user["folder"], full_path_names)
-            file_path = folder_path / fname
-
-            if file_path.exists():
-                # Archive path: relative to the parent of the target folder
-                rel_path_names = full_path_names[strip_count:]
-                arcname = os.path.join(*rel_path_names, fname)
-                zf.write(file_path, arcname=arcname)
+    entries: list[tuple[Path, str]] = []
+    for file_info in target_files:
+        path_names = user_service.folder_path_names_from_map(folder_map, file_info["folder_id"])
+        file_path = file_service.upload_base / user["folder"] / Path(*path_names) / file_info["name"]
+        archive_name = os.path.join(*path_names[strip_count:], file_info["name"])
+        entries.append((file_path, archive_name))
+    temp_zip_path = await create_archive(entries)
 
     return FileResponse(
         path=temp_zip_path,

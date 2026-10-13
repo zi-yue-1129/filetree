@@ -6,6 +6,8 @@ Enables refresh-resume and efficient direct-to-disk uploads.
 """
 
 import base64
+import asyncio
+import weakref
 import hashlib
 import logging
 import os
@@ -17,6 +19,7 @@ import aiofiles
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
 from fastapi.responses import Response
 from starlette.requests import ClientDisconnect
+from starlette.concurrency import run_in_threadpool
 
 from backend.config import settings
 from backend.core.auth import extract_bearer_token
@@ -44,6 +47,7 @@ CHUNK_SIZE = 5 * 1024 * 1024  # 5MB chunks (aligned with R2 Multipart)
 
 # Initialize services
 metadata_store = TusMetadataStore()
+_upload_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
 audit_service = AuditService(
     os.path.join(settings.paths.user_info_file.parent, "audit_logs.json")
 )
@@ -228,12 +232,12 @@ async def create_tus_upload(
         )
 
         # Check for existing upload (resume)
-        existing = metadata_store.get_upload_by_fingerprint(
-            fingerprint, user["username"]
+        existing = await run_in_threadpool(
+            metadata_store.get_upload_by_fingerprint, fingerprint, user["username"]
         )
 
         if existing and not await _has_active_origin(existing):
-            metadata_store.mark_aborted(existing["id"])
+            await run_in_threadpool(metadata_store.mark_aborted, existing["id"])
             (settings.paths.tus_temp_folder / existing["id"]).unlink(missing_ok=True)
             existing = None
 
@@ -266,7 +270,8 @@ async def create_tus_upload(
             )
 
         # Store metadata
-        created = metadata_store.create_upload(
+        created = await run_in_threadpool(
+            metadata_store.create_upload,
             upload_id=upload_id,
             fingerprint=fingerprint,
             username=user["username"],
@@ -371,7 +376,7 @@ async def get_tus_upload_offset(
     Returns:
         Endpoint response.
     """
-    upload = metadata_store.get_upload(upload_id)
+    upload = await run_in_threadpool(metadata_store.get_upload, upload_id)
 
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
@@ -412,66 +417,73 @@ async def upload_tus_chunk(
     Returns:
         Endpoint response.
     """
-    upload = metadata_store.get_upload(upload_id)
+    lock = _upload_locks.get(upload_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _upload_locks[upload_id] = lock
+    async with lock:
+        upload = await run_in_threadpool(metadata_store.get_upload, upload_id)
 
-    if not upload:
-        raise HTTPException(status_code=404, detail="Upload not found")
-    await _authorize_upload(request, upload)
+        if not upload:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        await _authorize_upload(request, upload)
 
-    # Verify offset
-    current_offset = upload["offset"]
-    if upload_offset != current_offset:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Offset mismatch. Expected {current_offset}, got {upload_offset}",
+        # Verify offset
+        current_offset = upload["offset"]
+        if upload_offset != current_offset:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Offset mismatch. Expected {current_offset}, got {upload_offset}",
+            )
+
+        # File path
+        file_path = settings.paths.tus_temp_folder / upload_id
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Upload file not found on server")
+
+        # The database offset is authoritative; partial or disconnected chunks roll back.
+        if content_length < 0 or current_offset + content_length > upload["size"]:
+            raise HTTPException(status_code=400, detail="Upload exceeds total size")
+        chunk_size = 0
+        try:
+            async with aiofiles.open(file_path, "r+b") as output:
+                await output.seek(current_offset)
+                await output.truncate(current_offset)
+                try:
+                    async for chunk in request.stream():
+                        chunk_size += len(chunk)
+                        if chunk_size > content_length:
+                            raise HTTPException(status_code=400, detail="Chunk exceeds Content-Length")
+                        await output.write(chunk)
+                    if chunk_size != content_length:
+                        raise HTTPException(status_code=400, detail="Chunk does not match Content-Length")
+                except BaseException:
+                    await output.truncate(current_offset)
+                    raise
+        except ClientDisconnect:
+            logger.warning("Client disconnected during upload of %s", upload_id)
+            return Response(status_code=499)
+        except OSError as error:
+            raise HTTPException(status_code=500, detail="Failed to write chunk") from error
+
+        new_offset = current_offset + chunk_size
+        updated = await run_in_threadpool(metadata_store.update_offset, upload_id, new_offset, [])
+        if not updated:
+            raise HTTPException(status_code=500, detail="Failed to persist upload offset")
+
+        logger.info(f"TUS Chunk {upload_id}: +{chunk_size} bytes, new_offset={new_offset}")
+
+        # Complete if done
+        if new_offset == upload["size"]:
+            logger.info(f"TUS Complete (Local): {upload_id}")
+            await run_in_threadpool(metadata_store.mark_completed, upload_id)
+            # Trigger finalization (can be awaited or background, strictly speaking instant move is fast enough)
+            background_tasks.add_task(finalize_upload_local, upload)
+
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT,
+            headers={"Upload-Offset": str(new_offset), "Tus-Resumable": TUS_VERSION},
         )
-
-    # File path
-    file_path = settings.paths.tus_temp_folder / upload_id
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Upload file not found on server")
-
-    # Read chunk
-    try:
-        chunk = await request.body()
-    except ClientDisconnect:
-        logger.warning(f"Client disconnected during upload of {upload_id}")
-        return Response(status_code=499)  # Client Closed Request
-
-    chunk_size = len(chunk)
-
-    # Check strict size
-    if current_offset + chunk_size > upload["size"]:
-        raise HTTPException(status_code=400, detail="Upload exceeds total size")
-
-    # Append to file
-    try:
-        async with aiofiles.open(file_path, "ab") as f:
-            await f.write(chunk)
-    except Exception as e:
-        logger.error(f"Write error for {upload_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to write chunk")
-
-    # Update metadata
-    new_offset = current_offset + chunk_size
-    metadata_store.update_offset(
-        upload_id, new_offset, parts=[]
-    )  # Parts no longer needed for local
-
-    logger.info(f"TUS Chunk {upload_id}: +{chunk_size} bytes, new_offset={new_offset}")
-
-    # Complete if done
-    if new_offset == upload["size"]:
-        logger.info(f"TUS Complete (Local): {upload_id}")
-        metadata_store.mark_completed(upload_id)
-        # Trigger finalization (can be awaited or background, strictly speaking instant move is fast enough)
-        background_tasks.add_task(finalize_upload_local, upload)
-
-    return Response(
-        status_code=status.HTTP_204_NO_CONTENT,
-        headers={"Upload-Offset": str(new_offset), "Tus-Resumable": TUS_VERSION},
-    )
-
 
 @router.delete("/upload/tus/{upload_id}")
 @limiter.limit(settings.rate_limit.tus_limit)
@@ -490,7 +502,7 @@ async def cancel_tus_upload(
     Returns:
         Endpoint response.
     """
-    upload = metadata_store.get_upload(upload_id)
+    upload = await run_in_threadpool(metadata_store.get_upload, upload_id)
 
     if not upload:
         raise HTTPException(status_code=404, detail="Upload not found")
@@ -499,7 +511,7 @@ async def cancel_tus_upload(
     logger.info(f"TUS Delete: upload_id={upload_id}")
 
     # Abort local upload
-    metadata_store.mark_aborted(upload_id)
+    await run_in_threadpool(metadata_store.mark_aborted, upload_id)
 
     file_path = settings.paths.tus_temp_folder / upload_id
     if file_path.exists():
