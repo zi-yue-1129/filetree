@@ -73,6 +73,15 @@ fn set_autostart(app: &AppHandle, item: &CheckMenuItem<tauri::Wry>) -> DesktopRe
 /// Build the local window with settings seeded before React and its API service.
 fn setup(app: &mut tauri::App) -> DesktopResult<()> {
     let store = app.store("settings.json")?;
+    // The plugin's initial load ignores parse errors; explicitly reload existing files.
+    if app
+        .path()
+        .app_data_dir()?
+        .join("settings.json")
+        .try_exists()?
+    {
+        store.reload()?;
+    }
     let server_url = match store.get("serverUrl") {
         Some(value) => {
             let origin = value

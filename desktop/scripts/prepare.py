@@ -24,11 +24,11 @@ def main() -> None:
             or parsed.path or parsed.query or parsed.fragment or parsed.username):
         raise ValueError("VITE_API_BASE_URL must be an HTTP(S) origin without a path or trailing slash")
     private_key = os.environ.get("TAURI_SIGNING_PRIVATE_KEY", "")
-    public_key = os.environ.get("TAURI_UPDATER_PUBLIC_KEY", "").strip()
+    public_key = os.environ.get("TAURI_UPDATER_PUBKEY", "").strip()
     if release and not private_key:
         raise ValueError("Release requires TAURI_SIGNING_PRIVATE_KEY secret")
     if private_key and not public_key:
-        raise ValueError("Signed builds require TAURI_UPDATER_PUBLIC_KEY repository variable")
+        raise ValueError("Signed builds require TAURI_UPDATER_PUBKEY repository variable")
     if not private_key:
         print("::warning::TAURI_SIGNING_PRIVATE_KEY is absent; building unsigned test installers without updater artifacts.")
     config = {"version": version, "bundle": {"createUpdaterArtifacts": bool(private_key)}}

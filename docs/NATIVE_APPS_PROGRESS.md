@@ -19,7 +19,7 @@ what is next, how to verify. See `docs/NATIVE_APPS.md` for the contract.
 - CI: first branch build pending push. Release publication and real-machine
   tray/drop/autostart/notification/update acceptance remain unverified.
 - Owner configuration needed: secrets `TAURI_SIGNING_PRIVATE_KEY` and optional
-  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; variables `TAURI_UPDATER_PUBLIC_KEY`
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; variables `TAURI_UPDATER_PUBKEY`
   and `VITE_API_BASE_URL`. No repository variables were configured at inspection.
   Backend/integrator must allow Tauri origins in CORS and call the reusable
   workflow after creating the release. Test builds explicitly warn and use

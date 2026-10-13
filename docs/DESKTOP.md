@@ -80,7 +80,7 @@ npx tauri signer generate -w ~/.tauri/filenexus.key
 | --- | --- | --- |
 | Secret | `TAURI_SIGNING_PRIVATE_KEY` | `filenexus.key` 的完整內容（不是路徑） |
 | Secret | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 產生私鑰時的密碼；若沒有密碼，使用空值或不設定 |
-| Variable | `TAURI_UPDATER_PUBLIC_KEY` | `filenexus.key.pub` 的完整內容，保持原始格式 |
+| Variable | `TAURI_UPDATER_PUBKEY` | `filenexus.key.pub` 的完整內容，保持原始格式 |
 | Variable | `VITE_API_BASE_URL` | 正式 API origin，例如 `https://api.example.com`，結尾不加 `/` |
 
 公開金鑰會透過 CI 設定合併至 Tauri updater 設定，編進安裝檔；私鑰只用於建置簽章。

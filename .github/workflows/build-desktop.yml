@@ -47,7 +47,7 @@ jobs:
       DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
       DESKTOP_RELEASE: ${{ inputs.version != '' }}
       CONFIGURED_API_URL: ${{ vars.VITE_API_BASE_URL }}
-      TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+      TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
       npm_config_cache: ${{ github.workspace }}/.npm-cache
     steps:
       - uses: actions/checkout@v4.2.2
@@ -56,11 +56,23 @@ jobs:
           node-version: '22.22.0'
           cache: npm
           cache-dependency-path: desktop/package-lock.json
+      - name: Install macOS bounded-command support
+        if: matrix.platform == 'macos'
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          subprocess.run(['brew', 'install', 'coreutils'], timeout=240, check=True)
+          prefix = subprocess.check_output(['brew', '--prefix', 'coreutils'], timeout=30, text=True).strip()
+          with Path(os.environ['GITHUB_PATH']).open('a') as path_file:
+              path_file.write(prefix + '/libexec/gnubin\n')
+          PY
       - name: Install Linux native dependencies
         if: matrix.platform == 'linux'
         run: |
           timeout 180s sudo apt-get update
-          timeout 300s sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          timeout 300s sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libdbus-1-dev patchelf
       - name: Install Rust
         run: |
           timeout 180s rustup toolchain install 1.90.0 --profile minimal --component rustfmt
