@@ -24,6 +24,11 @@ public enum FileNexusLifecycle {
         }
         if !registered {
             registered = true
+            // Once per process, before any picker runs. Housekeeping only: a
+            // failure is logged and startup continues.
+            do { try NativeStorage.removeOrphanedPicked() } catch {
+                logger.error("Cannot remove orphaned picked files: \(error.localizedDescription, privacy: .public)")
+            }
             for identifier: String in [PhotoBackup.processingIdentifier, PhotoBackup.refreshIdentifier] {
                 let accepted: Bool = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
                     let worker: Task<Void, Never> = Task { @MainActor in

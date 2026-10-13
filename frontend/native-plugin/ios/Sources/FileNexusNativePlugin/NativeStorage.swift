@@ -135,6 +135,34 @@ enum NativeStorage {
         return destination
     }
 
+    /// Move an app-private file (e.g. a picker copy) into another app directory without copying bytes.
+    static func move(_ url: URL, to directory: URL) throws -> URL {
+        guard url.isFileURL else { throw NativeFailure("Only local file URLs can be uploaded", code: "INVALID_ARGUMENT") }
+        let destination: URL = directory.appendingPathComponent(UUID().uuidString + "-" + url.lastPathComponent)
+        try FileManager.default.moveItem(at: url, to: destination)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                                             ofItemAtPath: destination.path)
+        return destination
+    }
+
+    /// Whether a file URL is a picker copy directly inside the `picked` directory.
+    static func isPickedCopy(_ url: URL) throws -> Bool {
+        guard url.isFileURL else { return false }
+        let picked: URL = try directory("picked")
+        return url.standardizedFileURL.deletingLastPathComponent().path == picked.standardizedFileURL.path
+    }
+
+    /// Delete picker copies left by a previous process. Enqueued picks were already moved into
+    /// the upload queue, and the UI's pending list does not survive a restart, so anything
+    /// still in `picked` at process start is unreachable. (Ages are not usable here because
+    /// `copyItem` keeps the source file's dates.)
+    static func removeOrphanedPicked() throws -> Void {
+        let picked: URL = try directory("picked")
+        for file: URL in try FileManager.default.contentsOfDirectory(at: picked, includingPropertiesForKeys: nil) {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
+
     /// Make a provider name safe as one server path segment (no separators, never empty, `.` or `..`).
     static func safeSegment(_ raw: String, fallback: String) -> String {
         let replaced: String = String(raw.unicodeScalars.map { scalar -> Character in

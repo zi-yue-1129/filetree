@@ -60,6 +60,8 @@ class FileNexusNativePlugin : Plugin() {
         NativeEvents.register(eventListener)
         UploadQueue.kick(context)
         PhotoBackup.schedule(context)
+        // Startup sweep: drop SAF grants left over from finished or abandoned picks.
+        io.execute { UriGrants.releaseUnused(context) }
     }
 
     override fun handleOnDestroy() {
@@ -161,13 +163,7 @@ class FileNexusNativePlugin : Plugin() {
         }
         val files = JSArray()
         uris.forEach { uri ->
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: SecurityException) {
-                // Provider does not offer persistable grants; the temporary grant
-                // still covers uploads while this process lives.
-                Log.e(TAG, "Could not persist read permission for $uri", e)
-            }
+            UriGrants.persistPicked(context, uri)
             files.put(describeUri(uri))
         }
         call.resolve(JSObject().apply { put("files", files) })
@@ -213,15 +209,9 @@ class FileNexusNativePlugin : Plugin() {
             call.reject("User cancelled the folder picker", "CANCELLED")
             return
         }
-        try {
-            // One grant on the tree covers every child document URI, so queued
-            // uploads stay readable after the app process is killed.
-            context.contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (e: SecurityException) {
-            // Same policy as pickFiles: the temporary grant still covers uploads
-            // while this process lives.
-            Log.e(TAG, "Could not persist read permission for $treeUri", e)
-        }
+        // One grant on the tree covers every child document URI, so queued
+        // uploads stay readable after the app process is killed.
+        UriGrants.persistPicked(context, treeUri)
         io.execute {
             try {
                 call.resolve(listFolder(treeUri))

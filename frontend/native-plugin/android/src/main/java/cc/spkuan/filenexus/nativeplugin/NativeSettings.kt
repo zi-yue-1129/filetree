@@ -3,6 +3,7 @@ package cc.spkuan.filenexus.nativeplugin
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import org.json.JSONObject
 
 /**
  * Credentials persisted by `configure()`.
@@ -159,6 +160,22 @@ class NativeSettings(context: Context) {
         get() = prefs.getString(KEY_PUSH_TOKEN, null)
         set(value) = prefs.edit(commit = true) { putOrRemove(KEY_PUSH_TOKEN, value) }
 
+    /**
+     * Pick time (epoch ms) per persisted SAF grant URI, see [UriGrants].
+     *
+     * @throws org.json.JSONException when the stored value is corrupt.
+     */
+    fun pickedGrants(): Map<String, Long> {
+        val raw = prefs.getString(KEY_PICKED_GRANTS, null) ?: return emptyMap()
+        val json = JSONObject(raw)
+        return json.keys().asSequence().associateWith { json.getLong(it) }
+    }
+
+    /** Replace the stored pick times (see [pickedGrants]). */
+    fun savePickedGrants(pickedAt: Map<String, Long>) {
+        prefs.edit(commit = true) { putString(KEY_PICKED_GRANTS, JSONObject(pickedAt).toString()) }
+    }
+
     private fun SharedPreferences.Editor.putOrRemove(key: String, value: String?) {
         if (value == null) remove(key) else putString(key, value)
     }
@@ -180,5 +197,6 @@ class NativeSettings(context: Context) {
         const val KEY_BACKUP_COUNT = "backup_count"
         const val KEY_BACKUP_ERROR = "backup_error"
         const val KEY_PUSH_TOKEN = "push_token"
+        const val KEY_PICKED_GRANTS = "picked_uri_grants"
     }
 }

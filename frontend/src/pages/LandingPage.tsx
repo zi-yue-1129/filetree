@@ -15,6 +15,8 @@ import { apiUrl } from '../services/api';
 import { getErrorMessage, isMobileNative, pickNativeFiles, pickNativeFolder } from '../native';
 import type { NativeFile } from '../native';
 import { NativePendingFilesPanel } from '../native/landing/NativePendingFilesPanel';
+import { makePendingFolder } from '../native/landing/pendingFolder';
+import type { PendingNativeFolder } from '../native/landing/pendingFolder';
 import { enqueueLandingFiles } from '../native/landing/landingUpload';
 
 /** Minimum spacing of upload-progress re-renders (at most 4 per second). */
@@ -44,6 +46,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
   // Native apps: files come from the system picker and upload in the background.
   const nativeMode = isMobileNative();
   const [nativeFiles, setNativeFiles] = useState<NativeFile[]>([]);
+  // Folder picks stay grouped so the pending list renders one row per folder.
+  const [nativeFolders, setNativeFolders] = useState<PendingNativeFolder[]>([]);
+  const nextFolderId = useRef(0);
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [firstLoginUserInfo, setFirstLoginUserInfo] = useState<{ username: string, oldPwd: string } | null>(null);
@@ -239,7 +244,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
         if (picked.files.length === 0) {
           alert(`資料夾「${picked.folderName}」中沒有可上傳的檔案`);
         } else {
-          setNativeFiles((previous) => [...previous, ...picked.files]);
+          nextFolderId.current += 1;
+          const folder = makePendingFolder(`folder-${nextFolderId.current}`, picked.folderName, picked.files);
+          setNativeFolders((previous) => [...previous, folder]);
         }
         if (picked.skippedCount > 0) {
           alert(`已略過 ${picked.skippedCount} 個無法上傳的項目（例如雲端文件捷徑）`);
@@ -284,7 +291,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     }
 
     const hasFiles = uppy && uppy.getFiles().length > 0;
-    const hasNativeFiles = nativeMode && nativeFiles.length > 0;
+    const allNativeFiles = [...nativeFiles, ...nativeFolders.flatMap((folder) => folder.files)];
+    const hasNativeFiles = nativeMode && allNativeFiles.length > 0;
 
     if (finalNotes.length === 0 && !hasFiles && !hasNativeFiles) {
       alert('請輸入文字或加入檔案');
@@ -297,8 +305,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
       // 1a. Native apps: hand picked files to the background upload queue.
       let nativeUploadUser: string | null = null;
       if (hasNativeFiles) {
-        nativeUploadUser = await enqueueLandingFiles(nativeFiles);
+        nativeUploadUser = await enqueueLandingFiles(allNativeFiles);
         setNativeFiles([]);
+        setNativeFolders([]);
       }
 
       // 1. Upload Files
@@ -589,7 +598,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
            {nativeMode ? (
              <NativePendingFilesPanel
                 files={nativeFiles}
+                folders={nativeFolders}
                 onRemove={(index) => setNativeFiles((previous) => previous.filter((_, i) => i !== index))}
+                onRemoveFolder={(id) => setNativeFolders((previous) => previous.filter((folder) => folder.id !== id))}
              />
            ) : (
            <PendingFilesPanel 

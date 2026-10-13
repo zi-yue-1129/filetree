@@ -166,7 +166,7 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
                 }
                 ids.append(try FileNexusLifecycle.engine().enqueue(file: url, name: name, mimeType: mime,
                     folderId: call.getString("folderId"), source: "app", relativePath: file["relativePath"] as? String,
-                    lastModified: file["lastModified"] as? Double))
+                    lastModified: file["lastModified"] as? Double, adopt: try NativeStorage.isPickedCopy(url)))
             }
             return ["jobIds": ids]
         }

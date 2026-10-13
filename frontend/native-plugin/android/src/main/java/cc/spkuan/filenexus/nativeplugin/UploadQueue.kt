@@ -147,6 +147,7 @@ object UploadQueue {
                 }
             }
             deleteOwnedFile(job)
+            UriGrants.releaseUnused(context)
         }
         return true
     }
@@ -155,7 +156,10 @@ object UploadQueue {
     fun clearFinished(context: Context) {
         val removed = UploadStore.get(context).deleteFinished()
         removed.forEach { cancelledJobIds.remove(it.jobId) }
-        background.execute { removed.forEach(::deleteOwnedFile) }
+        background.execute {
+            removed.forEach(::deleteOwnedFile)
+            UriGrants.releaseUnused(context)
+        }
     }
 
     /**
