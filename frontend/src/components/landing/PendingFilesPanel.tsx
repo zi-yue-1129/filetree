@@ -34,7 +34,7 @@ const formatDuration = (seconds: number) => {
   return `${s}s`;
 };
 
-export const PendingFilesPanel: React.FC<PendingFilesPanelProps> = ({
+const PendingFilesPanelView: React.FC<PendingFilesPanelProps> = ({
   pendingFiles,
   onRemoveFile,
 }) => {
@@ -73,8 +73,7 @@ export const PendingFilesPanel: React.FC<PendingFilesPanelProps> = ({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                layout
-                className="group/item relative p-3 bg-white/60 dark:bg-white/10 rounded-xl border border-white/20 dark:border-white/5 hover:border-purple-500/30 transition-all shadow-sm backdrop-blur-sm flex items-center gap-3 cursor-default"
+                className="group/item relative p-3 bg-white/60 dark:bg-white/10 rounded-xl border border-white/20 dark:border-white/5 hover:border-purple-500/30 transition-colors shadow-sm flex items-center gap-3 cursor-default"
               >
                 <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-white/10 flex items-center justify-center shrink-0">
                   <FileText className="w-5 h-5 text-gray-500 dark:text-gray-300" />
@@ -97,10 +96,10 @@ export const PendingFilesPanel: React.FC<PendingFilesPanelProps> = ({
                     <div className="space-y-1.5">
                       {/* Bar */}
                       <div className="h-1.5 w-full bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${file.progress.percentage}%` }}
-                          className="h-full bg-linear-to-r from-purple-500 to-cyan-500"
+                        {/* transform-only animation: no layout per progress tick */}
+                        <div
+                          className="h-full w-full origin-left bg-linear-to-r from-purple-500 to-cyan-500 transition-transform duration-300 ease-out"
+                          style={{ transform: `scaleX(${file.progress.percentage / 100})` }}
                         />
                       </div>
                       
@@ -147,7 +146,10 @@ export const PendingFilesPanel: React.FC<PendingFilesPanelProps> = ({
       </div>
 
       {/* Decorative BG element */}
-      <div className="absolute -top-10 -right-10 w-24 h-24 lg:w-32 lg:h-32 bg-purple-500/10 blur-3xl rounded-full pointer-events-none" />
+      <div className="absolute -top-20 -right-20 w-40 h-40 lg:w-56 lg:h-56 fx-glow text-purple-500/10" />
     </div>
   );
 };
+
+/** Memoized: the landing page re-renders on every keystroke in the note input. */
+export const PendingFilesPanel = React.memo(PendingFilesPanelView);

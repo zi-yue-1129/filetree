@@ -5,6 +5,7 @@ import { FileUp, ShieldCheck, HelpCircle, Sun, Moon, Smartphone, Settings } from
 import { cn } from '../lib/utils';
 import { isMobileNative } from '../native';
 import { useTheme } from '../contexts/ThemeContext';
+import { EffectsToggle } from './EffectsToggle';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -145,6 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
             )}
             <span>{theme === 'dark' ? '淺色模式' : '深色模式'}</span>
           </button>
+          <EffectsToggle />
         </div>
 
         {/* Admin Link - Only show on localhost/internal network */}

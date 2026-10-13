@@ -75,7 +75,7 @@ export const ShortcutPage: React.FC = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-8rem)] overflow-x-hidden custom-scrollbar">
-      <div className="absolute top-1/4 -right-20 w-[50vw] h-[40vh] bg-quantum-cyan/5 blur-[6rem] rounded-full -z-10 animate-pulse" />
+      <div className="absolute top-1/4 -right-20 w-[50vw] h-[40vh] fx-glow text-quantum-cyan/5 -z-10" />
 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
         <div className="flex items-center justify-center gap-4 mb-4">

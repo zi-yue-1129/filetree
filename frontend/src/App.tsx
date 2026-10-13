@@ -14,6 +14,8 @@ import { AuraField } from './components/AuraField';
 import { Sidebar } from './components/Sidebar';
 import { PublicDirectory } from './components/PublicDirectory';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { EffectsProvider } from './contexts/EffectsContext';
+import { useEffects } from './hooks/useEffects';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
@@ -219,6 +221,7 @@ const MainLayout: React.FC<{
  */
 const AppContent: React.FC = () => {
   const { theme } = useTheme();
+  const { level: effectsLevel } = useEffects();
   const [users, setUsers] = useState<Array<{ username: string; folder: string }>>([]);
   const [config, setConfig] = useState<{ allowed_extensions?: string[] }>({});
   const [loading, setLoading] = useState(true);
@@ -268,7 +271,7 @@ const AppContent: React.FC = () => {
       {isMobileNative() && <NativeBootstrap />}
       <div className="min-h-screen relative text-gray-900 dark:text-white/90 selection:bg-quantum-cyan/30">
         {/* Background Layer - Dynamic based on theme */}
-        {theme === 'dark' ? <Starfield /> : <AuraField />}
+        {theme === 'dark' ? <Starfield animated={effectsLevel === 'full'} /> : <AuraField animated={effectsLevel === 'full'} />}
 
         <React.Suspense fallback={
            <div className="flex items-center justify-center min-h-screen">
@@ -326,9 +329,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <EffectsProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </EffectsProvider>
     </ThemeProvider>
   );
 };

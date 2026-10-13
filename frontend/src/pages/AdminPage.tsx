@@ -358,8 +358,8 @@ export const AdminPage: React.FC = () => {
     <div className="relative min-h-screen p-[clamp(1rem,3vw,2rem)] sm:p-[clamp(1.5rem,4vw,3rem)] space-y-[clamp(1.5rem,4vh,3rem)] overflow-hidden bg-transparent">
 
       {/* Background Ambient Elements */}
-      <div className="absolute top-1/4 -left-20 w-[60vw] h-[50vh] bg-quantum-cyan/5 blur-[clamp(3rem,8vw,8rem)] rounded-full -z-10 animate-pulse" />
-      <div className="absolute bottom-1/4 -right-20 w-[80vw] h-[60vh] bg-neural-violet/5 blur-[clamp(4rem,10vw,10rem)] rounded-full -z-10 animate-pulse" style={{ animationDelay: '2s' }} />
+      <div className="absolute top-1/4 -left-20 w-[60vw] h-[50vh] fx-glow text-quantum-cyan/5 -z-10" />
+      <div className="absolute bottom-1/4 -right-20 w-[80vw] h-[60vh] fx-glow text-neural-violet/5 -z-10" />
 
       {/* Admin Header */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10 max-w-10xl mx-auto">

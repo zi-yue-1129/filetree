@@ -86,7 +86,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           className={cn(
-            "fixed bottom-0 left-0 right-0 z-9999 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t border-white/20 dark:border-white/10 p-3 sm:p-4 flex items-center justify-between shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)]",
+            // 95% opaque: a backdrop blur here was invisible but re-filtered the
+            // scrolling list behind the bar on every frame.
+            "fixed bottom-0 left-0 right-0 z-9999 bg-white/95 dark:bg-gray-900/95 border-t border-white/20 dark:border-white/10 p-3 sm:p-4 flex items-center justify-between shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)]",
             "pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-[calc(1rem+env(safe-area-inset-bottom))]",
             "lg:hidden"
           )}

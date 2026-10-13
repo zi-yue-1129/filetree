@@ -22,8 +22,8 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
   return (
     <div className="relative min-h-[calc(100vh-8rem)] overflow-x-hidden custom-scrollbar">
       {/* Background Glow */}
-      <div className="absolute top-1/4 -right-20 w-[50vw] h-[40vh] bg-quantum-cyan/5 blur-[6rem] rounded-full -z-10 animate-pulse" />
-      <div className="absolute bottom-1/4 -left-20 w-[40vw] h-[30vh] bg-neural-violet/5 blur-[6rem] rounded-full -z-10 animate-pulse" />
+      <div className="absolute top-1/4 -right-20 w-[50vw] h-[40vh] fx-glow text-quantum-cyan/5 -z-10" />
+      <div className="absolute bottom-1/4 -left-20 w-[40vw] h-[30vh] fx-glow text-neural-violet/5 -z-10" />
 
       {/* Header */}
       <motion.div

@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { initNative } from './native/bootstrap'
+import { applyEffectsLevel, readEffectsPreference, resolveStaticLevel } from './lib/effects'
+
+// Apply the low-power level before the first paint so low-end devices never
+// start the expensive effects (EffectsProvider keeps it in sync afterwards).
+applyEffectsLevel(resolveStaticLevel(readEffectsPreference()).level)
 
 /** Mount the React app. */
 function render(): void {
