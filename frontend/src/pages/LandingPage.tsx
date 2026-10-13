@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { UploadCloud } from 'lucide-react';
 import { SecurityInitializationModal } from '../components/SecurityInitializationModal';
 import { PendingNotesPanel } from '../components/landing/PendingNotesPanel';
@@ -508,7 +508,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
        {/* Drag Overlay - Ensure High Z-Index */}
        <AnimatePresence>
         {isDragOver && (
-          <motion.div
+          <m.div
             key="drag-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 pointer-events-none z-100 bg-cyan-500/20 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-cyan-400 p-8"
@@ -517,7 +517,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
               <UploadCloud className="w-16 h-16 text-cyan-600 animate-bounce" />
               <h2 className="text-2xl font-bold text-gray-800 dark:text-white">釋放滑鼠以上傳檔案</h2>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 

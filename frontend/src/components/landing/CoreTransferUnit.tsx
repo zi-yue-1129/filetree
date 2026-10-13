@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import {
   Cpu,
   Activity,
@@ -56,7 +56,7 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
   return (
     <div className="w-full">
       {/* Floating Title */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-6 lg:mb-[2.5vh] space-y-1"
@@ -70,7 +70,7 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
         <p className="text-[0.6rem] lg:text-[0.65rem] uppercase tracking-[0.4em] lg:tracking-[0.6em] font-bold text-cyan-600/80 dark:text-quantum-cyan/60 pl-2 lg:pl-4">
           File Management Hub 📁
         </p>
-      </motion.div>
+      </m.div>
 
       <div className="glass-card-premium p-0.5 relative group mx-auto w-full shadow-2xl hover:shadow-cyan-500/20 transition-all duration-500 hover:scale-[1.005] rounded-4xl lg:rounded-[2.5rem]">
         <div className="neural-border rounded-4xl lg:rounded-[2.5rem] p-5 lg:px-[3vw] lg:py-[3vh] space-y-5 lg:space-y-[2.5vh] relative overflow-hidden">

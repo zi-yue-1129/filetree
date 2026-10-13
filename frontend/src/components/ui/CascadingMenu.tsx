@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, Folder as FolderIcon, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Folder } from '../dashboard/FolderSidebar';
@@ -102,7 +102,7 @@ const MenuItem: React.FC<{
       {/* Submenu Portal */}
       {hasChildren && isHovered && createPortal(
         <AnimatePresence>
-          <motion.div
+          <m.div
             initial={{ opacity: 0, x: -5, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -5, scale: 0.95 }}
@@ -120,7 +120,7 @@ const MenuItem: React.FC<{
             {node.children.map(child => (
               <MenuItem key={child.id} node={child} onSelect={onSelect} depth={depth + 1} />
             ))}
-          </motion.div>
+          </m.div>
         </AnimatePresence>,
         document.body
       )}
@@ -169,7 +169,7 @@ const MobileDrillDownMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect, 
       {createPortal(
         <AnimatePresence>
           {isOpen && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -179,7 +179,7 @@ const MobileDrillDownMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect, 
                 setHistory([]);
               }}
             >
-              <motion.div
+              <m.div
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
@@ -252,8 +252,8 @@ const MobileDrillDownMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect, 
                   </button>
                 </div>
 
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
           )}
         </AnimatePresence>,
         document.body
@@ -325,7 +325,7 @@ const DesktopCascadingMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect,
       {createPortal(
         <AnimatePresence>
           {isOpen && (
-            <motion.div
+            <m.div
               initial={{ 
                 opacity: 0, 
                 y: placement === 'top' ? -5 : 5, 
@@ -369,7 +369,7 @@ const DesktopCascadingMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect,
                   </div>
                 )}
               </div>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>,
         document.body

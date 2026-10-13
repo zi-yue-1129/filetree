@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { HelpCircle, FileUp, Zap, Lock, Clock, Globe, Cpu, ExternalLink, Users } from 'lucide-react';
 
 interface HelpPageProps {
@@ -26,7 +26,7 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
       <div className="absolute bottom-1/4 -left-20 w-[40vw] h-[30vh] fx-glow text-neural-violet/5 -z-10" />
 
       {/* Header */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-12"
@@ -42,13 +42,13 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
         <p className="filenexus-brand text-xs! uppercase tracking-[0.4em] opacity-60">
           FileNexus System Documentation v2.2
         </p>
-      </motion.div>
+      </m.div>
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto pb-20">
         
         {/* Feature Card: Upload */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -80,10 +80,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
             </div>
             <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-40 transition-opacity" />
           </div>
-        </motion.div>
+        </m.div>
 
         {/* Feature Card: Notes */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -116,10 +116,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
             </div>
             <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-40 transition-opacity" />
           </div>
-        </motion.div>
+        </m.div>
 
         {/* Feature Card: Lifecycle */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -146,10 +146,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
               重要數據請務必於效期內完成回寫或備份
             </li>
           </ul>
-        </motion.div>
+        </m.div>
 
         {/* Feature Card: Security */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -176,10 +176,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
               不建議共享主密碼，如有需求請使用「分享連結」功能
             </li>
           </ul>
-        </motion.div>
+        </m.div>
 
         {/* Feature Card: Share */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -206,10 +206,10 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
               自動產生對應 QR Code，便於跨端設備快速存取
             </li>
           </ul>
-        </motion.div>
+        </m.div>
 
         {/* Feature Card: Access */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -242,12 +242,12 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
             </div>
             <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-40 transition-opacity" />
           </div>
-        </motion.div>
+        </m.div>
 
       </div>
 
       {/* Footer Note */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.7 }}
@@ -260,7 +260,7 @@ export const HelpPage: React.FC<HelpPageProps> = ({ onOpenDirectory }) => {
         </div>
         <span className="filenexus-brand text-xs! tracking-[0.3em] uppercase inline-block">FileNexus</span>
         <span className="mx-2">Autonomous Hub</span>
-      </motion.div>
+      </m.div>
     </div>
   );
 };

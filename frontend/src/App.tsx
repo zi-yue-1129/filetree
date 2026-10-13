@@ -9,9 +9,12 @@ const ShortcutPage = React.lazy(() => import('./pages/ShortcutPage').then(module
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage })));
 const SharePage = React.lazy(() => import('./pages/SharePage').then(module => ({ default: module.SharePage })));
 const SettingsPage = React.lazy(() => import('./native/settings/SettingsPage').then(module => ({ default: module.SettingsPage })));
-// Canvas backgrounds are separate chunks so plain mode never downloads them.
+// Canvas backgrounds are split so only the active theme's one is downloaded
+// (and plain mode downloads neither); the CSS body background shows until it loads.
 const Starfield = React.lazy(() => import('./components/Starfield').then(module => ({ default: module.Starfield })));
 const AuraField = React.lazy(() => import('./components/AuraField').then(module => ({ default: module.AuraField })));
+// Native-only startup tasks (update checks, Capgo updater) are never needed on the web.
+const NativeBootstrap = React.lazy(() => import('./native/NativeBootstrap').then(module => ({ default: module.NativeBootstrap })));
 import { Sidebar } from './components/Sidebar';
 import { PublicDirectory } from './components/PublicDirectory';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -22,7 +25,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
-import { NativeBootstrap } from './native/NativeBootstrap';
 import { isMobileNative } from './native';
 
 interface UserData {
@@ -271,7 +273,11 @@ const AppContent: React.FC = () => {
 
   return (
     <BrowserRouter>
-      {isMobileNative() && <NativeBootstrap />}
+      {isMobileNative() && (
+        <React.Suspense fallback={null}>
+          <NativeBootstrap />
+        </React.Suspense>
+      )}
       <div className="min-h-screen relative text-gray-900 dark:text-white/90 selection:bg-quantum-cyan/30">
         {/* Background Layer - Dynamic based on theme */}
         {effectsLevel !== 'plain' && (

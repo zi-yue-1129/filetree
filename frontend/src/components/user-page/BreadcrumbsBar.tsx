@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { Folder as FolderIcon, ChevronRight, CheckSquare, Square, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Folder, SelectedItem } from '../../types/dashboard';
@@ -88,7 +88,7 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
       
       <AnimatePresence>
         {isSelectionMode && (
-          <motion.div 
+          <m.div 
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.8, opacity: 0 }}
@@ -112,7 +112,7 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
             >
               <X className="w-4 h-4" />
             </button>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
