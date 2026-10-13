@@ -3,6 +3,43 @@
 Newest entries first. Each entry: date, workstream, branch, what is done,
 what is next, how to verify. See `docs/NATIVE_APPS.md` for the contract.
 
+## 2026-10-13 — iOS (Codex), branch `feat/native-ios` — implementation / CI pending
+
+- Done: app-local Keychain configuration; durable file-backed TUS queue with
+  create/HEAD/PATCH, original/chunk files, proxy Location rewriting, strict
+  offsets, 10-attempt exponential retries, local completion/failure notifications,
+  cancellation/termination, queue events and all shared TypeScript API methods.
+- Done: original-resource PhotoKit backup, creation-date + localIdentifier enqueue
+  and completion checkpoints, per-resource deduplication, background processing /
+  refresh registration at launch, foreground + PhotoKit change scans, limited access.
+  Backups begin with newly created assets after enabling; batches are 50 assets.
+- Done: `cc.spkuan.filenexus.share` target embedded under PlugIns; files/images/
+  videos/URLs (URLs become text files). Optional App Group credentials/inbox and
+  background session with sharedContainerIdentifier. Default SideStore unsigned
+  IPA requires no App Group entitlement: independent extension device login,
+  extension-local Keychain and visible in-process upload before dismissing.
+  SideStore signing code appends Team ID to groups; installed profile discovery
+  handles that when a signer supplies group entitlements. Shared Keychain and
+  cross-sandbox URL path handoff are intentionally avoided. Source evidence and
+  friend-facing LocalDevVPN/iLoader/pairing instructions are in IOS_SIDELOAD.md.
+- Done: existing generated 1024px app icon retained; SPM links Capgo and native
+  plugin, CI checks manual update mode / 10-second rollback configuration.
+  Reusable unsigned IPA build, push/dispatch test artifacts, v2 SideStore source,
+  identity/version/arm64/unsigned checks, upload to existing draft release only.
+- Verification: Linux cannot run Xcode. CI compilation/protocol checks and IPA
+  inspection are pending the first branch push; no device result is claimed.
+- Needs real iPhone: free-account SideStore install (Keep Extensions), independent
+  share login/upload, Files/Photos/Safari providers, large media/lifetime limits,
+  suspension/relaunch/network interruption/revocation, notifications, limited Photos,
+  BG scheduling, optional rewritten App Group, Capgo bundle swap and rollback.
+- Limits: iOS controls background opportunities; force-quit cancels transfers.
+  No APNs. Wi-Fi-only backup requires locally available originals; iCloud-only
+  resources surface export errors rather than silently using cellular. Extension
+  foreground transfers require keeping the share UI open; main-app logout does
+  not revoke the independently registered share device.
+- Ownership: only iOS-owned files and this required shared progress entry changed;
+  definitions.ts and capacitor.config.ts are unchanged.
+
 ## 2026-10-13 — Mobile core + Android (Claude), branch `feat/native-mobile` — Android implementation
 Done
 - Android plugin (`frontend/native-plugin/android`, Kotlin): hand-rolled TUS
