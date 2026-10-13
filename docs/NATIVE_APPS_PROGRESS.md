@@ -198,6 +198,21 @@ Next / notes for others
   `FileNexusErrorCode`.
 - `frontend/src/native/index.ts`: `getPlatform()` + typed wrappers.
 
+## 2026-10-13 — Integrator: v0.1.0 released
+- Tag `v0.1.0` (commit f8dbc74) → run 38389304390: all 9 jobs green
+  (prepare, web-bundle, android, ios, desktop linux/windows/macos,
+  desktop publish, publish). Release is published and latest:
+  https://github.com/zi-yue-1129/filetree/releases/tag/v0.1.0
+- Verified via `releases/latest/download/`: `web-bundle.json`,
+  `android.json`, `sidestore-source.json`, `latest.json` resolve with correct
+  URLs. Downloaded APK sha256 matches `android.json`; `apksigner` signer
+  certificate SHA-256 `3c709a30…e741708c` equals the release keystore
+  (`CN=FileNexus, O=FileNexus, C=TW`).
+- Known gaps: no real-device testing yet on any platform; the app default API
+  URL is still the placeholder `https://api-filetree.spkuan.cc` (users can
+  override it in Settings); `--generate-notes` produced unhelpful release
+  notes (only lists PR #2) — consider hand-written notes for v0.1.1+.
+
 ## 2026-10-13 — Integrator (deployment note)
 - The production backend will NOT run on the development machine; it will be
   deployed on another host with `docker compose --profile tunnel up -d`
