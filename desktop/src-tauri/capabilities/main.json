@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Desktop bridge permissions for the bundled local FileNexus window only",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-ask",
+    "dialog:allow-message",
+    "notification:default",
+    "updater:default",
+    "process:allow-restart",
+    "store:default"
+  ]
+}

@@ -1,0 +1,8 @@
+node_modules/
+src-tauri/target/
+generated/
+artifacts/
+src-tauri/ci.conf.json
+*.key
+*.key.pub
+__pycache__/

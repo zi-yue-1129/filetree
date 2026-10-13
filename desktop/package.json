@@ -1,0 +1,29 @@
+{
+  "name": "filenexus-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "tauri build",
+    "dev": "tauri dev",
+    "prepare:frontend": "node scripts/build-frontend.mjs",
+    "check": "tsc --noEmit",
+    "test": "python3 -m unittest discover -s tests && node --test tests/notifications.test.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.3",
+    "@tauri-apps/plugin-autostart": "2.7.0",
+    "@tauri-apps/plugin-dialog": "2.8.2",
+    "@tauri-apps/plugin-notification": "2.6.0",
+    "@tauri-apps/plugin-process": "2.4.0",
+    "@tauri-apps/plugin-store": "2.5.0",
+    "@tauri-apps/plugin-updater": "2.13.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.2",
+    "@types/node": "24.10.1",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}
