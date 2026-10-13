@@ -10,3 +10,8 @@ SERVER__CORS_ORIGINS='["https://filenexus.pages.dev"]'
 # CLOUDFLARE TUNNEL (only for `docker compose --profile tunnel up -d`)
 # In the tunnel's public hostname, point the service to http://backend:5168
 TUNNEL_TOKEN=""
+
+# ANDROID FCM PUSH (optional; unset disables remote push)
+# Use an absolute path readable by the backend. For Docker, put the service
+# account JSON in ./data/secrets/ and use its container path below.
+# PUSH__FCM_SERVICE_ACCOUNT_FILE="/app/data/secrets/firebase-service-account.json"

@@ -38,6 +38,19 @@ CREATE TABLE IF NOT EXISTS users (
     show_in_list INTEGER NOT NULL DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS devices (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_name TEXT NOT NULL,
+    platform TEXT NOT NULL CHECK (platform IN ('android', 'ios', 'windows', 'macos')),
+    token_hash TEXT NOT NULL UNIQUE,
+    push_token TEXT,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
+
 CREATE TABLE IF NOT EXISTS folders (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
