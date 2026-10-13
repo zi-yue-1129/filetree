@@ -1,0 +1,77 @@
+# Release orchestrator: tag vX.Y.Z -> draft release -> all platform builds
+# upload assets -> publish as "latest" only if every build succeeded, so the
+# in-app updaters (which read releases/latest/download/...) never see a
+# partially uploaded release.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        name: Derive version from tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag $tag is not vX.Y.Z"; exit 1
+          fi
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --draft --title "FileNexus $GITHUB_REF_NAME" --generate-notes \
+            --verify-tag
+
+  web-bundle:
+    needs: prepare
+    uses: ./.github/workflows/build-web-bundle.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  android:
+    needs: prepare
+    uses: ./.github/workflows/build-android.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  ios:
+    needs: prepare
+    uses: ./.github/workflows/build-ios.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  desktop:
+    needs: prepare
+    uses: ./.github/workflows/build-desktop.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  publish:
+    needs: [prepare, web-bundle, android, ios, desktop]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish release as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --latest
