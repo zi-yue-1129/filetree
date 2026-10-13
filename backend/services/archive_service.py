@@ -10,10 +10,24 @@ from starlette.concurrency import run_in_threadpool
 
 # Avoid twenty simultaneous compressors and large disk queues on small hosts.
 _archive_slots = asyncio.Semaphore(2)
-_COMPRESSED_EXTENSIONS = frozenset({
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".mkv",
-    ".webm", ".zip", ".gz", ".bz2", ".xz", ".7z",
-})
+_COMPRESSED_EXTENSIONS = frozenset(
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".webp",
+        ".mp4",
+        ".mov",
+        ".mkv",
+        ".webm",
+        ".zip",
+        ".gz",
+        ".bz2",
+        ".xz",
+        ".7z",
+    }
+)
 
 
 def _write_archive(entries: Sequence[tuple[Path, str]]) -> Path:
@@ -21,11 +35,21 @@ def _write_archive(entries: Sequence[tuple[Path, str]]) -> Path:
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temporary:
         archive_path = Path(temporary.name)
     try:
-        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
+        with zipfile.ZipFile(
+            archive_path, "w", zipfile.ZIP_DEFLATED, compresslevel=1
+        ) as archive:
             for file_path, archive_name in entries:
                 if file_path.is_file():
-                    compression = (zipfile.ZIP_STORED if file_path.suffix.lower() in _COMPRESSED_EXTENSIONS else zipfile.ZIP_DEFLATED)
-                    archive.write(file_path, arcname=archive_name, compress_type=compression)
+                    compression = (
+                        zipfile.ZIP_STORED
+                        if file_path.suffix.lower() in _COMPRESSED_EXTENSIONS
+                        else zipfile.ZIP_DEFLATED
+                    )
+                    archive.write(
+                        file_path,
+                        arcname=archive_name,
+                        compress_type=compression,
+                    )
     except BaseException:
         archive_path.unlink(missing_ok=True)
         raise

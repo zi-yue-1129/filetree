@@ -717,7 +717,8 @@ class FileService:
                             stat.st_mtime
                         ).isoformat(),
                     })
-                except OSError:
+                except FileNotFoundError:
+                    logger.debug("File disappeared during reconciliation: %s", item)
                     continue
         return files
 

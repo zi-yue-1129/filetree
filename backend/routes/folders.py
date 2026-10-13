@@ -335,7 +335,7 @@ async def download_folder(
     if target_folder["is_locked"] and not is_authenticated:
         raise HTTPException(status_code=403, detail="Folder is locked")
 
-    all_folders = await user_service.get_folders_by_username(username)
+    all_folders = user["folders"]
     folder_map = {f["id"]: f for f in all_folders}
 
     # 1. Identify all descendant folder IDs

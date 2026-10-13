@@ -14,9 +14,13 @@ class ApiGZipMiddleware:
             app: Wrapped application.
         """
         self.app = app
-        self.compressed_app = GZipMiddleware(app, minimum_size=1024, compresslevel=1)
+        self.compressed_app = GZipMiddleware(
+            app, minimum_size=1024, compresslevel=1
+        )
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
         """Dispatch transfer traffic unchanged and compress eligible API payloads.
 
         Args:
@@ -25,8 +29,20 @@ class ApiGZipMiddleware:
             send: Response message sender.
         """
         path = scope.get("path", "")
-        excluded = any(fragment in path for fragment in ("/download", "/batch-download", "/upload", "/thumbnail/"))
-        if scope["type"] == "http" and path.startswith("/api/") and not excluded:
+        excluded = any(
+            fragment in path
+            for fragment in (
+                "/download",
+                "/batch-download",
+                "/upload",
+                "/thumbnail/",
+            )
+        )
+        if (
+            scope["type"] == "http"
+            and path.startswith("/api/")
+            and not excluded
+        ):
             await self.compressed_app(scope, receive, send)
         else:
             await self.app(scope, receive, send)

@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Start periodic background task
     async def periodic_cleanup() -> None:
+        """Clean stale upload sessions until application shutdown."""
         while True:
             await asyncio.sleep(36000)  # Run every 10 hour
             try:
@@ -95,6 +96,7 @@ def apply_windows_patches() -> None:
             orig_call_connection_lost = _ProactorBasePipeTransport._call_connection_lost
 
             def patched_call_connection_lost(self: Any, exc: Optional[BaseException]) -> None:
+                """Handle expected Windows transport shutdown errors."""
                 try:
                     orig_call_connection_lost(self, exc)
                 except (ConnectionResetError, ConnectionAbortedError):
@@ -154,6 +156,10 @@ app.add_middleware(
         "Upload-Metadata", 
         "Location",
         "Content-Length",
+        "ETag",
+        "Cache-Control",
+        "Content-Range",
+        "Accept-Ranges",
         "Authorization" # Ensure Bearer tokens can be handled
     ]
 )

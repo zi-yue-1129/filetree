@@ -110,7 +110,10 @@ class TusMetadataStore:
             metadata: Additional metadata dict.
         
         Returns:
-            Created upload record dict, or None on failure.
+            Created upload record dict, or None if concurrently removed.
+
+        Raises:
+            sqlite3.Error: When the session cannot be persisted.
         """
         now = datetime.now(timezone.utc).isoformat(sep=" ")
         

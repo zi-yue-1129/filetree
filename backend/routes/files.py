@@ -42,6 +42,31 @@ audit_service = AuditService(
 )
 
 
+async def _resolve_content_path(
+    user: dict[str, Any], username: str, filename: str
+) -> tuple[Path, bool]:
+    """Resolve placement and effective locks with one query at any folder depth.
+
+    Args:
+        user: Account with its already-loaded folder tree.
+        username: Account username, distinct from its physical storage name.
+        filename: Requested file name.
+
+    Returns:
+        Physical path and effective user/file/folder lock state.
+    """
+    folders_by_id = {folder["id"]: folder for folder in user["folders"]}
+    records = await file_service.get_file_access_records(
+        user["folder"], username, [filename], folders_by_id
+    )
+    record = records.get(filename)
+    folder_id = record.folder_id if record else None
+    path_names = user_service.folder_path_names_from_map(folders_by_id, folder_id)
+    file_path = file_service.upload_base / user["folder"] / Path(*path_names) / filename
+    is_locked = user["is_locked"] or (record.is_locked if record else False)
+    return file_path, is_locked
+
+
 @router.get("/files/{username}", response_model=List[FileInfo])
 async def get_files(
     username: str,
@@ -514,9 +539,7 @@ async def download_direct(
         raise HTTPException(status_code=404, detail="使用者不存在")
 
     # Check locks
-    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
-        user["folder"], username, filename
-    )
+    file_path, is_locked = await _resolve_content_path(user, username, filename)
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="此資源已被鎖定，請先解鎖")
@@ -525,19 +548,6 @@ async def download_direct(
             raise HTTPException(status_code=403, detail="無效或過期的存取權杖")
 
     # Resolve physical path
-    from backend.services.database import get_files_db
-
-    db = await get_files_db()
-    cursor = await db.execute(
-        "SELECT folder_id FROM files WHERE username = ? AND filename = ?",
-        (user["folder"], filename),
-    )
-    row = await cursor.fetchone()
-    folder_id = row["folder_id"] if row else None
-    path_names = await user_service.get_folder_path_names(username, folder_id)
-    folder = file_service._get_folder_path(user["folder"], path_names)
-    file_path = folder / filename
-
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="檔案不存在")
 
@@ -579,28 +589,13 @@ async def get_thumbnail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
-        user["folder"], username, filename
-    )
+    file_path, is_locked = await _resolve_content_path(user, username, filename)
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="Locked resource")
         # Owner tokens unlock every file; share tokens only their own file.
         if not await token_service.resolves_file_access(token, username, filename):
             raise HTTPException(status_code=403, detail="Invalid token")
-
-    from backend.services.database import get_files_db
-
-    db = await get_files_db()
-    cursor = await db.execute(
-        "SELECT folder_id FROM files WHERE username = ? AND filename = ?",
-        (user["folder"], filename),
-    )
-    row = await cursor.fetchone()
-    folder_id = row["folder_id"] if row else None
-    path_names = await user_service.get_folder_path_names(username, folder_id)
-    folder = file_service._get_folder_path(user["folder"], path_names)
-    file_path = folder / filename
 
     thumb_path = await thumbnail_service.get_thumbnail(file_path)
     if thumb_path:
@@ -753,7 +748,7 @@ async def batch_download(
 
     folders_by_id = {
         folder["id"]: folder
-        for folder in await user_service.get_folders_by_username(username)
+        for folder in user["folders"]
     }
 
     # Bulk-load placement and effective lock state (file or ancestor folder)
