@@ -6,7 +6,10 @@
 # the large user files stay on the Windows disk.
 #
 # Paths come from .env (forward slashes):
-#   FILES_ROOT=F:/FILESTATION   -> contains uploads/, tus_temp/, cache/
+#   FILES_ROOT=F:/FILESTATION   -> contains uploads/, tus_temp/, cache/, backups/
+#
+# Database backups are written to ${FILES_ROOT}/backups, i.e. outside the
+# named volume, so they survive `docker volume rm` or a broken Docker install.
 services:
   backend:
     volumes:
@@ -14,6 +17,7 @@ services:
       - ${FILES_ROOT:?set FILES_ROOT in .env}/uploads:/app/data/uploads
       - ${FILES_ROOT}/tus_temp:/app/data/tus_temp
       - ${FILES_ROOT}/cache:/app/data/cache
+      - ${FILES_ROOT}/backups:/app/backups
 
 volumes:
   filenexus-db:

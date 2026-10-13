@@ -16,11 +16,14 @@ import threading
 
 logger = logging.getLogger(__name__)
 
+# Relative to the process working directory (/app inside the container).
+DEFAULT_DB_PATH = "data/tus_metadata.db"
+
 
 class TusMetadataStore:
     """Stores TUS upload metadata for fingerprint-based resume detection."""
-    
-    def __init__(self, db_path: str = "data/tus_metadata.db") -> None:
+
+    def __init__(self, db_path: str = DEFAULT_DB_PATH) -> None:
         """Initialize the metadata store.
         
         Args:

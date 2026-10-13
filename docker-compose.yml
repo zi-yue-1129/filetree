@@ -11,12 +11,15 @@ services:
     user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       SERVER__DEBUG: "false"
+      BACKUP__DIR: /app/backups
     ports:
       - "127.0.0.1:5168:5168"
     volumes:
       # Host directory holding users.db / files.db / notes.db / uploads/ etc.
       # Set DATA_DIR in .env to use an existing data directory on another disk.
       - ${DATA_DIR:-./data}:/app/data
+      # Scheduled database backups; set BACKUP_DIR to a directory on another disk.
+      - ${BACKUP_DIR:-./backups}:/app/backups
 
   cloudflared:
     image: cloudflare/cloudflared:latest
