@@ -26,6 +26,7 @@ struct NativeUpload: Codable {
     var patchEnd: Int64?
     var credentialId: String?
     var backupKey: String?
+    var backupResourceCount: Int?
 
     /// Expose only the public queue snapshot, never credentials or private paths.
     func json() -> [String: Any] {
@@ -37,6 +38,7 @@ struct NativeUpload: Codable {
 }
 
 /// File-backed TUS transfers with durable state and a reconnectable background session.
+@MainActor
 final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     static let chunkSize: Int64 = 8 * 1024 * 1024
     let directory: URL
@@ -44,8 +46,10 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     let groupIdentifier: String?
     let background: Bool
     private let queueFile: URL
+    private let sessionOverride: URLSessionConfiguration?
     private var jobs: [NativeUpload]
     private var reconnecting: Bool = true
+    private var stopped: Bool = false
     private var retryTimer: Timer?
     private let logger: Logger = Logger(subsystem: "cc.spkuan.filenexus", category: "Upload")
     var onProgress: ((NativeUpload) -> Void)?
@@ -53,9 +57,9 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     var configurationProvider: () throws -> NativeConfiguration = { return try NativeStorage.configuration() }
 
     private lazy var session: URLSession = {
-        let configuration: URLSessionConfiguration = background
+        let configuration: URLSessionConfiguration = sessionOverride ?? (background
             ? URLSessionConfiguration.background(withIdentifier: sessionIdentifier)
-            : URLSessionConfiguration.default
+            : URLSessionConfiguration.default)
         configuration.sharedContainerIdentifier = groupIdentifier
         configuration.sessionSendsLaunchEvents = background
         configuration.isDiscretionary = false
@@ -65,13 +69,14 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }()
 
     /// Restore a queue from disk; use independent identifiers for app and extension.
-    init(directory: URL, identifier: String, groupIdentifier: String? = nil, background: Bool = true) throws {
+    init(directory: URL, identifier: String, groupIdentifier: String? = nil, background: Bool = true, sessionConfiguration: URLSessionConfiguration? = nil) throws {
         self.directory = directory
         self.queueFile = directory.appendingPathComponent("uploads.json")
         self.jobs = try NativeStorage.read([NativeUpload].self, from: self.queueFile) ?? []
         self.sessionIdentifier = identifier
         self.groupIdentifier = groupIdentifier
         self.background = background
+        self.sessionOverride = sessionConfiguration
         super.init()
         session.getAllTasks { tasks in
             DispatchQueue.main.async {
@@ -93,7 +98,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
 
     /// Copy a file before committing its job, so provider access may safely expire.
     func enqueue(file: URL, name: String, mimeType: String, folderId: String?, source: String,
-                 relativePath: String? = nil, lastModified: Double? = nil, wifiOnly: Bool = false, backupKey: String? = nil) throws -> String {
+                 relativePath: String? = nil, lastModified: Double? = nil, wifiOnly: Bool = false, backupKey: String? = nil, backupResourceCount: Int? = nil) throws -> String {
         if let key = backupKey, let existing = jobs.first(where: { $0.backupKey == key && $0.state != "cancelled" }) {
             return existing.jobId
         }
@@ -107,7 +112,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
         guard let size = attributes[.size] as? NSNumber else { throw NativeFailure("Cannot determine upload file size") }
         var job: NativeUpload = NativeUpload(jobId: UUID().uuidString, name: name, mimeType: mimeType,
             folderId: folderId, source: source, bytesTotal: size.int64Value, file: copied,
-            relativePath: relativePath, lastModified: lastModified, credentialId: configuration.deviceId, backupKey: backupKey)
+            relativePath: relativePath, lastModified: lastModified, credentialId: try configuration.fingerprint(), backupKey: backupKey, backupResourceCount: backupResourceCount)
         // Constraint is retained in metadata-free state alongside the queue.
         if wifiOnly { job.source = "backup" }
         jobs.append(job)
@@ -123,15 +128,16 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     /// Pause submitted tasks on logout; cancelled requests are reconciled by HEAD later.
     func configurationChanged() throws -> Void {
         let configuration: NativeConfiguration = try configurationProvider()
-        session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+        let previousTasks: Set<Int> = Set(jobs.compactMap { $0.taskIdentifier })
+        session.getAllTasks { tasks in tasks.filter { previousTasks.contains($0.taskIdentifier) }.forEach { $0.cancel() } }
         for index: Int in jobs.indices where ["uploading", "queued", "retrying"].contains(jobs[index].state) {
             jobs[index].taskIdentifier = nil
             jobs[index].state = "queued"
             // Never resume a capability created under another account/device.
-            if configuration.deviceId != jobs[index].credentialId {
+            if configuration.deviceToken != nil, try configuration.fingerprint() != jobs[index].credentialId {
                 jobs[index].uploadURL = nil
                 jobs[index].bytesSent = 0
-                jobs[index].credentialId = configuration.deviceId
+                jobs[index].credentialId = try configuration.fingerprint()
             }
         }
         try persist()
@@ -184,7 +190,16 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     /// Stop extension foreground work when its UI is dismissed.
-    func stop() -> Void { session.invalidateAndCancel(); retryTimer?.invalidate() }
+    func stop() -> Void {
+        stopped = true
+        retryTimer?.invalidate()
+        for index: Int in jobs.indices where jobs[index].taskIdentifier != nil {
+            jobs[index].taskIdentifier = nil
+            jobs[index].state = "queued"
+        }
+        do { try persist() } catch { logger.error("Cannot persist stopped share queue: \(error.localizedDescription)") }
+        session.invalidateAndCancel()
+    }
 
     private func request(_ url: URL, method: String, token: String) -> URLRequest {
         var request: URLRequest = URLRequest(url: url)
@@ -203,7 +218,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     private func pump() -> Void {
-        guard !reconnecting, !jobs.contains(where: { $0.taskIdentifier != nil }) else { return }
+        guard !stopped, !reconnecting, !jobs.contains(where: { $0.taskIdentifier != nil }) else { return }
         retryTimer?.invalidate()
         do {
             let configuration: NativeConfiguration = try configurationProvider()
@@ -212,13 +227,20 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
             let now: Date = Date()
             guard let index = jobs.firstIndex(where: {
                 ["queued", "retrying"].contains($0.state) && ($0.retryAt == nil || ($0.retryAt ?? now) <= now)
-            }) else {
+            }) ?? (background ? jobs.firstIndex(where: { $0.state == "retrying" }) : nil) else {
                 if let next = jobs.filter({ $0.state == "retrying" }).compactMap({ $0.retryAt }).min() {
                     retryTimer = Timer.scheduledTimer(withTimeInterval: max(1, next.timeIntervalSinceNow), repeats: false) { _ in self.pump() }
                 }
                 return
             }
             do {
+                let fingerprint: String = try configuration.fingerprint()
+                if jobs[index].credentialId != fingerprint {
+                    jobs[index].uploadURL = nil
+                    jobs[index].bytesSent = 0
+                    jobs[index].credentialId = fingerprint
+                    try persist()
+                }
                 if let url = jobs[index].uploadURL {
                     try submit(index, stage: "head", request: request(url, method: "HEAD", token: credentials.1))
                 } else {
@@ -276,6 +298,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     private func activate(_ task: URLSessionUploadTask, index: Int) throws -> Void {
+        if let retryAt = jobs[index].retryAt { task.earliestBeginDate = retryAt }
         jobs[index].state = "uploading"
         jobs[index].error = nil
         jobs[index].taskIdentifier = task.taskIdentifier
@@ -292,7 +315,8 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
         defer { do { try input.close() } catch { logger.error("Cannot close upload original: \(error.localizedDescription)") } }
         try input.seek(toOffset: UInt64(job.bytesSent))
         let length: Int = Int(min(Self.chunkSize, job.bytesTotal - job.bytesSent))
-        guard let data = try input.read(upToCount: length), data.count == length else {
+        let data: Data = length == 0 ? Data() : (try input.read(upToCount: length) ?? Data())
+        guard data.count == length else {
             throw NativeFailure("Upload original is truncated or unreadable")
         }
         let chunk: URL = directory.appendingPathComponent(job.jobId + "-patch")
@@ -342,14 +366,33 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     /// Validate server acknowledgements before advancing persisted offsets.
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) -> Void {
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) -> Void {
+        DispatchQueue.main.async { self.complete(task, error: error) }
+    }
+
+    private func complete(_ task: URLSessionTask, error: Error?) -> Void {
+        guard !stopped else { return }
         guard let description = task.taskDescription else { return }
         let parts: [Substring] = description.split(separator: "|")
         guard parts.count == 2, let index = jobs.firstIndex(where: { $0.jobId == String(parts[0]) }),
               jobs[index].taskIdentifier == task.taskIdentifier, jobs[index].state != "cancelled" else { return }
         jobs[index].taskIdentifier = nil
-        if let error = error { fail(index, error: error); return }
         do {
+            let configuration: NativeConfiguration = try configurationProvider()
+            if configuration.deviceToken == nil {
+                jobs[index].state = "queued"
+                try persist()
+                return
+            }
+            let fingerprint: String = try configuration.fingerprint()
+            if jobs[index].credentialId != fingerprint {
+                jobs[index].uploadURL = nil
+                jobs[index].bytesSent = 0
+                jobs[index].credentialId = fingerprint
+                jobs[index].state = "queued"
+                try persist(); pump(); return
+            }
+            if let error = error { fail(index, error: error); return }
             guard let response = task.response as? HTTPURLResponse else { throw NativeFailure("TUS returned no HTTP response", retryable: true) }
             let status: Int = response.statusCode
             let stage: String = String(parts[1])
@@ -359,8 +402,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
                 jobs[index].state = "queued"
                 try persist(); pump(); return
             }
-            let expected: Int = stage == "create" ? 201 : (stage == "head" ? 200 : 204)
-            guard status == expected else { throw NativeFailure("TUS \(stage) failed (HTTP \(status))", retryable: TUSProtocol.retryable(status)) }
+            guard TUSProtocol.accepts(status, stage: stage) else { throw NativeFailure("TUS \(stage) failed (HTTP \(status))", retryable: TUSProtocol.retryable(status)) }
             if stage == "create" {
                 let credentials: (URL, String) = try configurationProvider().credentials()
                 jobs[index].uploadURL = try TUSProtocol.location(response.value(forHTTPHeaderField: "Location"), origin: credentials.0)
@@ -375,7 +417,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
             jobs[index].updatedAt = Date().timeIntervalSince1970 * 1000
             jobs[index].attempts = 0
             jobs[index].retryAt = nil
-            if offset == jobs[index].bytesTotal {
+            if TUSProtocol.completed(stage: stage, offset: offset, total: jobs[index].bytesTotal) {
                 jobs[index].state = "completed"
                 try persist()
                 onProgress?(jobs[index]); notify(jobs[index]); try removeFiles(jobs[index]); pump()
@@ -388,14 +430,16 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     /// Forward the system's completion callback only after all delegate events drain.
-    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) -> Void {
-        let completion: (() -> Void)? = backgroundCompletion
-        backgroundCompletion = nil
-        DispatchQueue.main.async { completion?() }
+    nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) -> Void {
+        DispatchQueue.main.async {
+            let completion: (() -> Void)? = self.backgroundCompletion
+            self.backgroundCompletion = nil
+            completion?()
+        }
     }
 
     /// Refuse HTTP redirects so a device token never leaks to a different host.
-    func urlSession(_ session: URLSession, task: URLSessionTask,
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
                     completionHandler: @escaping (URLRequest?) -> Void) -> Void {
         completionHandler(nil)

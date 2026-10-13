@@ -34,6 +34,10 @@ struct ProtocolChecks {
         try expectFailure { _ = try TUSProtocol.location("/other/abc", origin: origin) }
         precondition(!TUSProtocol.retryable(401) && !TUSProtocol.retryable(403) && !TUSProtocol.retryable(413))
         precondition(TUSProtocol.retryable(409) && TUSProtocol.retryable(429) && TUSProtocol.retryable(503))
+        precondition(TUSProtocol.accepts(200, stage: "create") && TUSProtocol.accepts(201, stage: "create"))
+        precondition(!TUSProtocol.accepts(204, stage: "create") && !TUSProtocol.accepts(200, stage: "patch"))
+        precondition(!TUSProtocol.completed(stage: "head", offset: 0, total: 0))
+        precondition(TUSProtocol.completed(stage: "patch", offset: 0, total: 0))
         print("PASS: TUS metadata, proxy Location, offset bounds, empty uploads and retry classification")
     }
 

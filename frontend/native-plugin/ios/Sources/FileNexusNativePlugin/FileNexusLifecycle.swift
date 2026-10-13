@@ -9,6 +9,7 @@ extension Notification.Name {
 }
 
 /// Process-lifetime services, also initialized when iOS relaunches without a WebView.
+@MainActor
 public enum FileNexusLifecycle {
     private static var uploadEngine: UploadEngine?
     private static var photoBackup: PhotoBackup?

@@ -36,6 +36,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Build web, check TUS protocol, sync Capgo and archive without signing
         run: python3 frontend/ios/ci/build.py build
+      - name: Exercise persisted TUS upload state machine on iOS simulator
+        run: python3 frontend/ios/ci/build.py test-uploads
       - name: Package IPA and verify app plus extension executables
         run: python3 frontend/ios/ci/build.py package
       - name: Upload unsigned IPA and inspection report

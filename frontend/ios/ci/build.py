@@ -81,6 +81,22 @@ def build() -> None:
          f"CURRENT_PROJECT_VERSION={build_number}", f"FILENEXUS_SERVER_URL={server}"], seconds=2100)
 
 
+def test_uploads() -> None:
+    """Run production URLSession queue regressions on an available iPhone simulator."""
+    listed = subprocess.run(["xcrun", "simctl", "list", "devices", "available", "--json"],
+                            capture_output=True, text=True, check=True, timeout=30)
+    devices: dict = json.loads(listed.stdout)["devices"]
+    candidates: list[dict] = [device for runtime, entries in sorted(devices.items(), reverse=True)
+                              if "iOS" in runtime for device in entries
+                              if device["isAvailable"] and device["name"].startswith("iPhone")]
+    if not candidates:
+        raise ValueError("An available iPhone simulator is required for upload state-machine tests")
+    run(["xcodebuild", "-project", "ios/App/App.xcodeproj", "-scheme", "UploadTests", "-configuration", "Debug",
+         "-destination", f"platform=iOS Simulator,id={candidates[0]['udid']}", "-parallel-testing-enabled", "NO",
+         "-derivedDataPath", str(OUTPUT / "TestDerivedData"), "-resultBundlePath", str(OUTPUT / "UploadTests.xcresult"),
+         "test", "CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGN_IDENTITY="], seconds=900)
+
+
 def package() -> None:
     """Package and inspect both executable bundles before emitting a SideStore source."""
     version, build_number = resolve_version()
@@ -103,7 +119,7 @@ def package() -> None:
         executable: Path = bundle / info["CFBundleExecutable"]
         if not executable.is_file():
             raise ValueError(f"Missing executable: {executable}")
-        run(["xcrun", "lipo", "-verify_arch", "arm64", str(executable)])
+        run(["xcrun", "lipo", str(executable), "-verify_arch", "arm64"])
         # Unsigned means no provisioning profile and no embedded code signature.
         signature = subprocess.run(["codesign", "-dv", str(bundle)], capture_output=True, timeout=30)
         if signature.returncode == 0:
@@ -151,9 +167,9 @@ def release() -> None:
 def main() -> None:
     """Dispatch a single bounded CI phase from the command line."""
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=["build", "package", "release", "test"])
+    parser.add_argument("phase", choices=["build", "package", "release", "test", "test-uploads"])
     phase: str = parser.parse_args().phase
-    {"build": build, "package": package, "release": release, "test": test_protocol}[phase]()
+    {"build": build, "package": package, "release": release, "test": test_protocol, "test-uploads": test_uploads}[phase]()
 
 
 if __name__ == "__main__":

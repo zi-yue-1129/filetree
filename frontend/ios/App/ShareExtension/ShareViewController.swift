@@ -86,6 +86,7 @@ final class ShareViewController: UIViewController {
                         files.append(try await receive(provider, directory: directory))
                     }
                 }
+                try Task.checkCancellation()
                 guard !files.isEmpty else { throw NativeFailure("No supported files, images, videos or URLs were shared") }
                 statusLabel.text = group == nil
                     ? "共 \(files.count) 個項目。免費簽署模式需在此獨立登入；上傳時請保持此畫面開啟。"

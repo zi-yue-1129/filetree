@@ -35,6 +35,21 @@ enum TUSProtocol {
         return offset
     }
 
+    /// The backend may return an existing active fingerprint with HTTP 200.
+    static func accepts(_ status: Int, stage: String) -> Bool {
+        switch stage {
+        case "create": return status == 200 || status == 201
+        case "head": return status == 200
+        case "patch": return status == 204
+        default: return false
+        }
+    }
+
+    /// Empty files still require PATCH to trigger backend import/finalization.
+    static func completed(stage: String, offset: Int64, total: Int64) -> Bool {
+        return offset == total && (total > 0 || stage == "patch")
+    }
+
     /// Distinguish permanent auth/validation errors from recoverable conflicts.
     static func retryable(_ status: Int) -> Bool {
         return status == 408 || status == 409 || status == 423 || status == 429 || status >= 500

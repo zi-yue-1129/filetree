@@ -19,10 +19,12 @@ struct BackupState: Codable {
     var lastUploadedIdentifier: String = ""
     var enqueuedCount: Int = 0
     var lastError: String?
+    var retryAssets: [String]?
     var baseline: Double = Date().timeIntervalSince1970 * 1000
 }
 
 /// Original-resource PhotoKit backup with resumable, idempotent enqueue checkpoints.
+@MainActor
 final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
     static let processingIdentifier: String = "cc.spkuan.filenexus.backup.processing"
     static let refreshIdentifier: String = "cc.spkuan.filenexus.backup.refresh"
@@ -128,6 +130,11 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
             let fetched: PHFetchResult<PHAsset> = PHAsset.fetchAssets(with: options)
             var assets: [PHAsset] = []
             fetched.enumerateObjects { asset, _, _ in assets.append(asset) }
+            let retryIds: [String] = state.retryAssets ?? []
+            let retryFetched: PHFetchResult<PHAsset> = PHAsset.fetchAssets(withLocalIdentifiers: retryIds, options: nil)
+            retryFetched.enumerateObjects { asset, _, _ in
+                if !assets.contains(where: { $0.localIdentifier == asset.localIdentifier }) { assets.append(asset) }
+            }
             assets.sort {
                 let left: Date = $0.creationDate ?? .distantPast
                 let right: Date = $1.creationDate ?? .distantPast
@@ -138,7 +145,7 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
                 try Task.checkCancellation()
                 guard let creation = asset.creationDate else { throw NativeFailure("Photo asset has no creation date") }
                 let timestamp: Double = creation.timeIntervalSince1970 * 1000
-                if let last = state.lastBackedUpAt, timestamp == last && asset.localIdentifier <= state.lastIdentifier { continue }
+                if !retryIds.contains(asset.localIdentifier), let last = state.lastBackedUpAt, timestamp == last && asset.localIdentifier <= state.lastIdentifier { continue }
                 if asset.mediaType == .video && !state.includeVideos { continue }
                 let resources: [PHAssetResource] = PHAssetResource.assetResources(for: asset).filter {
                     $0.type == .photo || (state.includeVideos && ($0.type == .video || $0.type == .pairedVideo))
@@ -157,12 +164,14 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
                     try Task.checkCancellation()
                     let mime: String = UTType(resource.uniformTypeIdentifier)?.preferredMIMEType ?? "application/octet-stream"
                     _ = try engine.enqueue(file: temporary, name: resource.originalFilename, mimeType: mime,
-                        folderId: state.folderId, source: "backup", lastModified: timestamp, wifiOnly: state.wifiOnly, backupKey: key)
+                        folderId: state.folderId, source: "backup", lastModified: timestamp, wifiOnly: state.wifiOnly, backupKey: key, backupResourceCount: resources.count)
                     try FileManager.default.removeItem(at: temporary)
                     state.enqueuedCount += 1
                 }
-                state.lastBackedUpAt = timestamp
-                state.lastIdentifier = asset.localIdentifier
+                if timestamp > (state.lastBackedUpAt ?? 0) || (timestamp == state.lastBackedUpAt && asset.localIdentifier > state.lastIdentifier) {
+                    state.lastBackedUpAt = timestamp
+                    state.lastIdentifier = asset.localIdentifier
+                }
                 try save()
                 processed += 1
                 if processed >= 50 { break }
@@ -190,11 +199,20 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
 
     /// Persist the last fully acknowledged asset identifier and creation date.
     func uploaded(_ job: NativeUpload) -> Void {
-        guard job.source == "backup", job.state == "completed", let key = job.backupKey,
+        guard job.source == "backup", let key = job.backupKey,
               let timestamp = job.lastModified, let separator = key.firstIndex(of: ":") else { return }
         let identifier: String = String(key[..<separator])
+        if job.state == "failed" {
+            var retryIds: Set<String> = Set(state.retryAssets ?? [])
+            retryIds.insert(identifier)
+            state.retryAssets = Array(retryIds).sorted()
+            do { try save() } catch { logger.error("Cannot persist failed asset for retry: \(error.localizedDescription)") }
+            return
+        }
+        guard job.state == "completed" else { return }
         let related: [NativeUpload] = engine.snapshots().filter { $0.backupKey?.hasPrefix(identifier + ":") == true }
-        guard related.allSatisfy({ $0.state == "completed" }) else { return }
+        guard let expected = job.backupResourceCount, related.count == expected, related.allSatisfy({ $0.state == "completed" }) else { return }
+        state.retryAssets = (state.retryAssets ?? []).filter { $0 != identifier }
         if timestamp > (state.lastUploadedAt ?? 0) ||
             (timestamp == state.lastUploadedAt && identifier > state.lastUploadedIdentifier) {
             state.lastUploadedAt = timestamp
@@ -220,7 +238,7 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
     }
 
     /// React to new accessible photos while the app process is alive.
-    func photoLibraryDidChange(_ changeInstance: PHChange) -> Void {
+    nonisolated func photoLibraryDidChange(_ changeInstance: PHChange) -> Void {
         DispatchQueue.main.async {
             Task { do { try await self.run() } catch { self.logger.error("Photo change scan failed: \(error.localizedDescription)") } }
         }

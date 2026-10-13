@@ -26,14 +26,14 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
 
     /// Forward native lifecycle events while the WebView is alive.
     public override func load() -> Void {
-        FileNexusLifecycle.launch()
+        DispatchQueue.main.async { FileNexusLifecycle.launch() }
         observers.append(NotificationCenter.default.addObserver(forName: .fileNexusUpload, object: nil, queue: .main) { [weak self] notification in
             if let job = notification.object as? NativeUpload { self?.notifyListeners("uploadProgress", data: job.json()) }
         })
         observers.append(NotificationCenter.default.addObserver(forName: .fileNexusShared, object: nil, queue: .main) { [weak self] notification in
             if let data = notification.object as? [String: Any] { self?.notifyListeners("sharedItems", data: data, retainUntilConsumed: true) }
         })
-        FileNexusLifecycle.active()
+        DispatchQueue.main.async { FileNexusLifecycle.active() }
     }
 
     deinit { for observer: NSObjectProtocol in observers { NotificationCenter.default.removeObserver(observer) } }
@@ -43,7 +43,7 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
         call.reject(error.localizedDescription, (error as? NativeFailure)?.code ?? "IO_ERROR", error)
     }
 
-    private func execute(_ call: CAPPluginCall, _ operation: @escaping () throws -> [String: Any]) -> Void {
+    private func execute(_ call: CAPPluginCall, _ operation: @MainActor @escaping () throws -> [String: Any]) -> Void {
         DispatchQueue.main.async {
             do { call.resolve(try operation()) } catch { self.reject(call, error) }
         }
@@ -213,7 +213,7 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
     /// Reject APK installation on iOS.
     @objc public func installApkUpdate(_ call: CAPPluginCall) -> Void { call.unavailable("Only available on Android") }
 
-    private func permissions() async -> [String: Any] {
+    @MainActor private func permissions() async -> [String: Any] {
         let settings: UNNotificationSettings = await UNUserNotificationCenter.current().notificationSettings()
         let notifications: String
         switch settings.authorizationStatus {

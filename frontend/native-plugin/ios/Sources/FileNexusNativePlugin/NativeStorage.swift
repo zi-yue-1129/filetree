@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CryptoKit
 import os
 
 /// Credentials in an executable-local Keychain; never a shared access group.
@@ -17,6 +18,13 @@ struct NativeConfiguration: Codable {
             throw NativeFailure("Configure an HTTPS server and sign in first", code: "NOT_CONFIGURED")
         }
         return (url, token)
+    }
+
+    /// Compare credential ownership without persisting the token in queue state.
+    func fingerprint() throws -> String {
+        let credentials: (URL, String) = try credentials()
+        return SHA256.hash(data: Data((credentials.0.absoluteString + "\n" + credentials.1).utf8))
+            .map { String(format: "%02x", $0) }.joined()
     }
 
     /// Return the exact TypeScript configuration shape.
