@@ -7,16 +7,18 @@ final class TUSFixture: URLProtocol {
     private static var requests: [URLRequest] = []
     private static var total: Int64 = 0
     private static var creationStatus: Int = 201
+    private static var initialOffset: Int64 = 0
     private static var patchStatus: Int = 204
 
     /// Reset the scripted backend before each independent engine test.
-    static func reset(total: Int64, creationStatus: Int = 201, patchStatus: Int = 204) -> Void {
+    static func reset(total: Int64, creationStatus: Int = 201, patchStatus: Int = 204, initialOffset: Int64 = 0) -> Void {
         lock.lock()
         defer { lock.unlock() }
         Self.requests = []
         Self.total = total
         Self.creationStatus = creationStatus
         Self.patchStatus = patchStatus
+        Self.initialOffset = initialOffset
     }
 
     /// Read recorded requests under the same transport lock.
@@ -39,6 +41,7 @@ final class TUSFixture: URLProtocol {
         let total: Int64 = Self.total
         let create: Int = Self.creationStatus
         let patch: Int = Self.patchStatus
+        let offset: Int64 = Self.initialOffset
         Self.lock.unlock()
         guard request.url?.host == "fixture.example" || request.url?.host == "new.example" else {
             client?.urlProtocol(self, didFailWithError: NativeFailure("Credentials were sent to an unexpected host"))
@@ -52,7 +55,7 @@ final class TUSFixture: URLProtocol {
             headers["Location"] = "http://internal-backend:5168/api/upload/tus/fixture"
         case "HEAD":
             status = 200
-            headers["Upload-Offset"] = "0"
+            headers["Upload-Offset"] = String(offset)
         case "PATCH":
             status = patch
             headers["Upload-Offset"] = String(total)
@@ -157,6 +160,48 @@ final class UploadEngineTests: XCTestCase {
         XCTAssertEqual(uploader.snapshots().first?.state, "completed")
         XCTAssertEqual(TUSFixture.recorded().first?.httpMethod, "POST")
         XCTAssertTrue(TUSFixture.recorded().allSatisfy { $0.url?.host == "new.example" })
+        uploader.stop()
+    }
+
+    /// HEAD reconciles a lost acknowledgement and PATCH sends only remaining bytes.
+    @MainActor func testResumeFromAcknowledgedOffset() async throws -> Void {
+        TUSFixture.reset(total: 3, initialOffset: 1)
+        let directory: URL = try directory()
+        let file: URL = directory.appendingPathComponent("retained.txt")
+        try Data("abc".utf8).write(to: file)
+        var job: NativeUpload = NativeUpload(jobId: UUID().uuidString, name: "retained.txt", mimeType: "text/plain", source: "app", bytesTotal: 3, file: file)
+        job.uploadURL = URL(string: "https://fixture.example/api/upload/tus/restored")
+        job.credentialId = try configuration().fingerprint()
+        try NativeStorage.write([job], to: directory.appendingPathComponent("uploads.json"))
+        let uploader: UploadEngine = try engine(directory: directory)
+        let completed: XCTestExpectation = expectation(description: "Acknowledged resume")
+        uploader.onProgress = { job in if ["completed", "failed"].contains(job.state) { completed.fulfill() } }
+        await fulfillment(of: [completed], timeout: 10)
+        XCTAssertEqual(uploader.snapshots().first?.state, "completed")
+        XCTAssertEqual(TUSFixture.recorded().map { $0.httpMethod ?? "" }, ["HEAD", "PATCH"])
+        let patch: URLRequest? = TUSFixture.recorded().last
+        XCTAssertEqual(patch?.value(forHTTPHeaderField: "Upload-Offset"), "1")
+        XCTAssertEqual(patch?.value(forHTTPHeaderField: "Content-Length"), "2")
+        uploader.stop()
+    }
+
+    /// A recoverable backend error persists its URL, acknowledged offset and backoff.
+    @MainActor func testRetryStateIsDurable() async throws -> Void {
+        TUSFixture.reset(total: 3, patchStatus: 503)
+        let directory: URL = try directory()
+        let file: URL = directory.appendingPathComponent("fixture.txt")
+        try Data("abc".utf8).write(to: file)
+        let uploader: UploadEngine = try engine(directory: directory)
+        let retrying: XCTestExpectation = expectation(description: "Durable retry")
+        uploader.onProgress = { job in if job.state == "retrying" { retrying.fulfill() } }
+        _ = try uploader.enqueue(file: file, name: "fixture.txt", mimeType: "text/plain", folderId: nil, source: "app")
+        await fulfillment(of: [retrying], timeout: 10)
+        let stored: [NativeUpload]? = try NativeStorage.read([NativeUpload].self, from: directory.appendingPathComponent("uploads.json"))
+        XCTAssertEqual(stored?.first?.state, "retrying")
+        XCTAssertEqual(stored?.first?.attempts, 1)
+        XCTAssertEqual(stored?.first?.bytesSent, 0)
+        XCTAssertNotNil(stored?.first?.uploadURL)
+        XCTAssertGreaterThan(stored?.first?.retryAt?.timeIntervalSinceNow ?? 0, 20)
         uploader.stop()
     }
 

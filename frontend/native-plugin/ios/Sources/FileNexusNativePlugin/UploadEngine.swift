@@ -153,6 +153,8 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
         }
         let job: NativeUpload = jobs[index]
         jobs[index].state = "cancelled"
+        jobs[index].error = nil
+        jobs[index].updatedAt = Date().timeIntervalSince1970 * 1000
         jobs[index].taskIdentifier = nil
         try persist()
         session.getAllTasks { tasks in
@@ -209,6 +211,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
         for index: Int in jobs.indices where ["queued", "retrying", "uploading"].contains(jobs[index].state) {
             jobs[index].taskIdentifier = nil
             jobs[index].state = cancelPending ? "cancelled" : "queued"
+            jobs[index].updatedAt = Date().timeIntervalSince1970 * 1000
             if cancelPending {
                 do { try removeFiles(jobs[index]) } catch { logger.error("Cannot clean cancelled share files: \(error.localizedDescription)") }
             }

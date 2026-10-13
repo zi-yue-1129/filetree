@@ -131,7 +131,7 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
             guard let folderId = state.folderId else { throw NativeFailure("Photo backup destination is unavailable") }
             try engine.retryFailedBackup(folderId: folderId)
             let options: PHFetchOptions = PHFetchOptions()
-            let startDate: Date = Date(timeIntervalSince1970: (state.lastBackedUpAt ?? state.baseline) / 1000)
+            let startDate: Date = Date(timeIntervalSince1970: (state.lastBackedUpAt ?? state.baseline) / 1000 - 0.001)
             options.predicate = NSPredicate(format: "creationDate >= %@", startDate as NSDate)
             options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
             let fetched: PHFetchResult<PHAsset> = PHAsset.fetchAssets(with: options)
@@ -156,10 +156,13 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
                 }
                 guard let creation = asset.creationDate else { throw NativeFailure("Photo asset has no creation date") }
                 let timestamp: Double = creation.timeIntervalSince1970 * 1000
-                if !retryIds.contains(asset.localIdentifier), let last = state.lastBackedUpAt, timestamp == last && asset.localIdentifier <= state.lastIdentifier { continue }
+                if !retryIds.contains(asset.localIdentifier) {
+                    let checkpoint: Double = state.lastBackedUpAt ?? state.baseline
+                    if timestamp < checkpoint || (timestamp == checkpoint && asset.localIdentifier <= state.lastIdentifier) { continue }
+                }
                 if asset.mediaType == .video && !state.includeVideos { continue }
                 let resources: [PHAssetResource] = PHAssetResource.assetResources(for: asset).filter {
-                    $0.type == .photo || (state.includeVideos && ($0.type == .video || $0.type == .pairedVideo))
+                    ($0.type == .photo || $0.type == .alternatePhoto) || (state.includeVideos && ($0.type == .video || $0.type == .pairedVideo))
                 }
                 guard !resources.isEmpty else { throw NativeFailure("Photo asset has no exportable original resource") }
                 for (index, resource): (Int, PHAssetResource) in resources.enumerated() {
