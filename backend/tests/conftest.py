@@ -40,6 +40,8 @@ os.environ.update(
         # the production cost (12) made each register() call O(users) * ~0.2s.
         # The minimum cost keeps real bcrypt hashing/verification in tests.
         "SECURITY__BCRYPT_ROUNDS": "4",
+        "BACKUP__DIR": str(_SANDBOX / "backups"),
+        "BACKUP__INITIAL_DELAY_SECONDS": "0",
     }
 )
 # TusMetadataStore resolves "data/tus_metadata.db" against the CWD.

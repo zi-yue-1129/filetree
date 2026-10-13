@@ -16,3 +16,4 @@ scripts
 .env
 backend/config.yaml
 **/__pycache__
+backups

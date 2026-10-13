@@ -93,6 +93,32 @@ class PushConfig(BaseModel):
     debounce_seconds: float = Field(default=30.0, gt=0)
 
 
+class BackupConfig(BaseModel):
+    """Scheduled SQLite backup settings (env vars ``BACKUP__*``).
+
+    Attributes:
+        enabled: Whether the server takes periodic backups.
+        dir: Directory receiving backup sets; relative paths resolve against
+            the project root. Should live on a different disk than the DBs.
+        interval_hours: Hours between two scheduled backups.
+        keep: Number of newest backup sets to retain; older sets are deleted.
+        initial_delay_seconds: Delay between startup and the first backup.
+    """
+
+    enabled: bool = True
+    dir: Path = Path("backups")
+    interval_hours: float = Field(default=24.0, gt=0)
+    keep: int = Field(default=14, ge=1)
+    initial_delay_seconds: float = Field(default=60.0, ge=0)
+
+    @model_validator(mode="after")
+    def resolve_relative_dir(self) -> "BackupConfig":
+        """Resolve a relative backup directory against PROJECT_ROOT."""
+        if not self.dir.is_absolute():
+            self.dir = PROJECT_ROOT / self.dir
+        return self
+
+
 class Config(BaseSettings):
     """Global configuration object."""
     server: ServerConfig = ServerConfig()
@@ -100,6 +126,7 @@ class Config(BaseSettings):
     security: SecurityConfig = SecurityConfig()
     logic: LogicConfig = LogicConfig()
     push: PushConfig = PushConfig()
+    backup: BackupConfig = BackupConfig()
 
     rate_limit: RateLimitConfig = RateLimitConfig()
 

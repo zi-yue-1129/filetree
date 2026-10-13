@@ -80,5 +80,14 @@ async def listusers():
         click.echo(f'{i}. {user["username"]} (Folder: {user["folder"]})')
 
 
+@cli.command()
+def backup() -> None:
+    """Back up all databases now (same format and retention as the scheduler)."""
+    from backend.services.backup_service import create_backup, default_sources
+
+    set_dir = create_backup(default_sources(), settings.backup.dir, settings.backup.keep)
+    click.echo(f'[OK] Backup written to {set_dir}')
+
+
 if __name__ == '__main__':
     cli()

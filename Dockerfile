@@ -14,7 +14,8 @@ COPY backend/ backend/
 # Persistent state (databases, uploads, tus temp files) lives under /app/data.
 # Pre-create it owned by the default runtime UID so an empty named volume
 # (used on Windows hosts, see deploy/windows/) inherits writable ownership.
-RUN mkdir -p /app/data && chown 1000:1000 /app/data
+# /app/backups receives scheduled database backups (bind-mount another disk).
+RUN mkdir -p /app/data /app/backups && chown 1000:1000 /app/data /app/backups
 VOLUME ["/app/data"]
 EXPOSE 5168
 
