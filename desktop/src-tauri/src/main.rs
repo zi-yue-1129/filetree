@@ -6,7 +6,9 @@ use std::error::Error;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder, WindowEvent};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+#[cfg(target_os = "macos")]
+use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_store::StoreExt;
@@ -169,6 +171,14 @@ fn setup(app: &mut tauri::App) -> DesktopResult<()> {
     Ok(())
 }
 
+/// Configure login registration with the platform-supported launcher options.
+fn autostart_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    let builder = tauri_plugin_autostart::Builder::new();
+    #[cfg(target_os = "macos")]
+    let builder = builder.macos_launcher(MacosLauncher::LaunchAgent);
+    builder.build()
+}
+
 /// Run the desktop runtime and report startup failures without panicking.
 fn main() {
     let result = tauri::Builder::default()
@@ -182,11 +192,7 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .macos_launcher(MacosLauncher::LaunchAgent)
-                .build(),
-        )
+        .plugin(autostart_plugin())
         .invoke_handler(tauri::generate_handler![log_desktop_error, notify_refresh])
         .setup(|app| {
             if let Err(error) = setup(app) {
