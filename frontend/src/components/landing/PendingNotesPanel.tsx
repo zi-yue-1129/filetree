@@ -7,7 +7,7 @@ interface PendingNotesPanelProps {
   onRemoveNote: (index: number) => void;
 }
 
-export const PendingNotesPanel: React.FC<PendingNotesPanelProps> = ({
+const PendingNotesPanelView: React.FC<PendingNotesPanelProps> = ({
   pendingNotes,
   onRemoveNote,
 }) => {
@@ -47,7 +47,7 @@ export const PendingNotesPanel: React.FC<PendingNotesPanelProps> = ({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 layout
-                className="group/item relative p-3 bg-white/60 dark:bg-white/10 rounded-xl border border-white/20 dark:border-white/5 hover:border-orange-500/30 transition-all cursor-default shadow-sm backdrop-blur-sm"
+                className="group/item relative p-3 bg-white/60 dark:bg-white/10 rounded-xl border border-white/20 dark:border-white/5 hover:border-orange-500/30 transition-colors cursor-default shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm text-gray-700 dark:text-gray-200 break-all font-mono leading-relaxed">
@@ -68,7 +68,10 @@ export const PendingNotesPanel: React.FC<PendingNotesPanelProps> = ({
       </div>
 
       {/* Decorative BG element */}
-      <div className="absolute -bottom-10 -left-10 w-24 h-24 lg:w-32 lg:h-32 bg-orange-500/10 blur-3xl rounded-full pointer-events-none" />
+      <div className="absolute -bottom-20 -left-20 w-40 h-40 lg:w-56 lg:h-56 fx-glow text-orange-500/10" />
     </div>
   );
 };
+
+/** Memoized: the landing page re-renders on every keystroke in the note input. */
+export const PendingNotesPanel = React.memo(PendingNotesPanelView);

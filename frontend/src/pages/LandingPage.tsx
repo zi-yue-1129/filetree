@@ -6,8 +6,8 @@ import { SecurityInitializationModal } from '../components/SecurityInitializatio
 import { PendingNotesPanel } from '../components/landing/PendingNotesPanel';
 import { PendingFilesPanel } from '../components/landing/PendingFilesPanel';
 import { CoreTransferUnit } from '../components/landing/CoreTransferUnit';
-import Uppy from '@uppy/core';
-import Tus from '@uppy/tus';
+// Uppy itself is loaded lazily (see ../lib/createUploader); types only here.
+import type Uppy from '@uppy/core';
 
 // Uppy styles
 import '@uppy/core/css/style.min.css';
@@ -16,6 +16,9 @@ import { getErrorMessage, isMobileNative, pickNativeFiles } from '../native';
 import type { NativeFile } from '../native';
 import { NativePendingFilesPanel } from '../native/landing/NativePendingFilesPanel';
 import { enqueueLandingFiles } from '../native/landing/landingUpload';
+
+/** Minimum spacing of upload-progress re-renders (at most 4 per second). */
+const PROGRESS_COMMIT_INTERVAL_MS = 250;
 
 interface LandingPageProps {
   data: {
@@ -51,51 +54,59 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
   const dragCounter = useRef(0);
   const lastStatsRef = useRef<Record<string, { lastBytes: number; lastTime: number; speed: number; eta: number }>>({});
 
-  // Dynamic Uppy Instance
+  // Dynamic Uppy Instance. Keyed on the allowed-extension list itself: the
+  // global USER_LIST_UPDATE refetch hands us a new (equal) config object, which
+  // used to destroy the uploader together with the files queued in it.
+  const allowedExtensionsKey = JSON.stringify(data?.config?.allowed_extensions ?? null);
   const [uppy, setUppy] = useState<Uppy | null>(null);
+  const [uploaderError, setUploaderError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (uppy) uppy.destroy();
+    const allowed = JSON.parse(allowedExtensionsKey) as string[] | null;
+    let cancelled = false;
+    let instance: Uppy | null = null;
+    let progressTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastProgressCommit = 0;
 
-    // Safety check for config
-    const allowed = data?.config?.allowed_extensions || null;
+    import('../lib/createUploader')
+      .then(({ createUploader }) => {
+        if (cancelled) return;
+        const u = createUploader({ allowedFileTypes: allowed, endpoint: apiUrl('/api/upload/tus') });
+        instance = u;
 
-    const u = new Uppy({
-      id: 'filenexus-uploader',
-      autoProceed: false,
-      debug: true,
-      restrictions: {
-        maxFileSize: 10 * 1024 * 1024 * 1024, // 10GB
-        allowedFileTypes: allowed
-      }
-    });
-
-    try {
-        u.use(Tus, {
-        endpoint: apiUrl('/api/upload/tus'),
-        chunkSize: 5 * 1024 * 1024,
-        retryDelays: [0, 1000, 3000, 5000],
-        removeFingerprintOnSuccess: true,
-        limit: 5,
-        });
-
-        u.on('file-added', () => {
+        // Progress ticks arrive many times per second per file; committing
+        // each one to React re-rendered the whole pending list. Progress is
+        // committed at most PROGRESS_COMMIT_INTERVAL_MS apart (trailing edge),
+        // structural changes (add/remove/complete) immediately.
+        const commitFiles = () => {
+          if (progressTimer !== null) {
+            clearTimeout(progressTimer);
+            progressTimer = null;
+          }
+          lastProgressCommit = Date.now();
           setPendingFiles(u.getFiles());
-        });
+        };
+        const scheduleProgressCommit = () => {
+          if (progressTimer !== null) return;
+          const wait = Math.max(0, lastProgressCommit + PROGRESS_COMMIT_INTERVAL_MS - Date.now());
+          progressTimer = setTimeout(commitFiles, wait);
+        };
+
+        u.on('file-added', commitFiles);
         u.on('file-removed', (file) => {
           if (file) delete lastStatsRef.current[file.id];
-          setPendingFiles(u.getFiles());
+          commitFiles();
         });
         u.on('upload-progress', (file, progress) => {
           if (!file) return;
           const now = Date.now();
-          
+
           if (!lastStatsRef.current[file.id]) {
-            lastStatsRef.current[file.id] = { 
-              lastBytes: progress.bytesUploaded, 
-              lastTime: now, 
-              speed: 0, 
-              eta: 0 
+            lastStatsRef.current[file.id] = {
+              lastBytes: progress.bytesUploaded,
+              lastTime: now,
+              speed: 0,
+              eta: 0
             };
             return;
           }
@@ -103,43 +114,52 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
           const stats = lastStatsRef.current[file.id];
           const bytesUploaded = progress.bytesUploaded;
           const bytesTotal = progress.bytesTotal ?? file.size ?? 0;
-          
+
           const timeDiff = (now - stats.lastTime) / 1000;
           if (timeDiff >= 0.2) { // Update faster for smoother UI
             const bytesDiff = bytesUploaded - stats.lastBytes;
             const currentSpeed = bytesDiff / timeDiff;
-            
+
             // Smoothed speed (Moving Average)
             stats.speed = stats.speed === 0 ? currentSpeed : (stats.speed * 0.7 + currentSpeed * 0.3);
             stats.lastBytes = bytesUploaded;
             stats.lastTime = now;
-            
+
             const remainingBytes = Number(bytesTotal) - bytesUploaded;
             stats.eta = stats.speed > 0 ? remainingBytes / stats.speed : 0;
-            
-            u.setFileMeta(file.id, { 
+
+            u.setFileMeta(file.id, {
                 uploadSpeed: stats.speed,
                 eta: stats.eta
             });
           }
 
-          setPendingFiles([...u.getFiles()]);
+          scheduleProgressCommit();
         });
         u.on('complete', () => {
-          setPendingFiles([]); 
+          if (progressTimer !== null) {
+            clearTimeout(progressTimer);
+            progressTimer = null;
+          }
+          setPendingFiles([]);
         });
         u.on('error', (error) => {
           console.error('Uppy global error:', error);
         });
 
         setUppy(u);
-    } catch (e) {
-        console.error("Uppy initialization failed", e);
-    }
+      })
+      .catch((error: unknown) => {
+        console.error('Uppy initialization failed', error);
+        if (!cancelled) setUploaderError(getErrorMessage(error));
+      });
 
-    return () => u.destroy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.config]);
+    return () => {
+      cancelled = true;
+      if (progressTimer !== null) clearTimeout(progressTimer);
+      instance?.destroy();
+    };
+  }, [allowedExtensionsKey]);
 
   // Sync password with Uppy meta
   useEffect(() => {
@@ -150,11 +170,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
 
   // --- Handlers ---
 
+  /**
+   * The uploader loads right after the first paint; tell the user instead of
+   * silently dropping files picked in that short window (or after a failure).
+   */
+  const requireUploader = (): Uppy | null => {
+    if (uppy) return uppy;
+    alert(uploaderError ? `上傳元件載入失敗：${uploaderError}` : '上傳元件載入中，請稍候再試');
+    return null;
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (uppy && e.target.files && e.target.files.length > 0) {
+    if (e.target.files && e.target.files.length > 0) {
+      const uploader = requireUploader();
+      if (!uploader) {
+        e.target.value = '';
+        return;
+      }
       Array.from(e.target.files).forEach((file) => {
         try {
-          uppy.addFile({ source: 'file-input', name: file.name, type: file.type, data: file });
+          uploader.addFile({ source: 'file-input', name: file.name, type: file.type, data: file });
         } catch (err) { console.warn('File add skipped:', err); }
       });
       // Reset input
@@ -163,12 +198,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
   };
 
   const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (uppy && e.target.files && e.target.files.length > 0) {
+    if (e.target.files && e.target.files.length > 0) {
+      const uploader = requireUploader();
+      if (!uploader) {
+        e.target.value = '';
+        return;
+      }
       Array.from(e.target.files).forEach((file) => {
         try {
           // For directory selection, webkitRelativePath contains the path
           const name = file.webkitRelativePath || file.name;
-          uppy.addFile({ 
+          uploader.addFile({ 
               source: 'folder-input', 
               name: name, 
               type: file.type, 
@@ -198,15 +238,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     }
   };
 
-  const handleRemoveNote = (index: number) => {
+  // Stable callbacks so the memoized pending panels skip keystroke re-renders.
+  const handleRemoveNote = useCallback((index: number) => {
     setPendingNotes(prev => prev.filter((_, i) => i !== index));
-  };
-  
-  const handleRemoveFile = (fileId: string) => {
+  }, []);
+
+  const handleRemoveFile = useCallback((fileId: string) => {
       if (uppy) {
           uppy.removeFile(fileId);
       }
-  }
+  }, [uppy]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -373,7 +414,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     setIsDragOver(false);
     dragCounter.current = 0;
 
-    if (!uppy) return;
+    if (!uppy) {
+      alert(uploaderError ? `上傳元件載入失敗：${uploaderError}` : '上傳元件載入中，請稍候再試');
+      return;
+    }
 
     // Use DataTransferItemList if available to get FileSystemEntry (supports folders)
     if (e.dataTransfer && e.dataTransfer.items) {
@@ -431,7 +475,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
         } catch (err) { console.warn('File add skipped:', err); }
       });
     }
-  }, [uppy, scanFiles]);
+  }, [uppy, uploaderError, scanFiles]);
 
   useEffect(() => {
     const handleWindowDragEnter = (e: DragEvent) => handleDragEnter(e);
@@ -459,7 +503,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     <div className="relative h-full w-full overflow-x-hidden bg-transparent custom-scrollbar">
       
       {/* Background glow - only in dark mode */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[90vh] bg-quantum-cyan/5 blur-[clamp(3rem,8vw,6rem)] rounded-full -z-10 animate-pulse hidden dark:block pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[90vh] fx-glow text-quantum-cyan/5 -z-10 hidden dark:block" />
 
        {/* Drag Overlay - Ensure High Z-Index */}
        <AnimatePresence>
