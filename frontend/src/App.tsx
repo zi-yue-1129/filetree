@@ -9,8 +9,9 @@ const ShortcutPage = React.lazy(() => import('./pages/ShortcutPage').then(module
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage })));
 const SharePage = React.lazy(() => import('./pages/SharePage').then(module => ({ default: module.SharePage })));
 const SettingsPage = React.lazy(() => import('./native/settings/SettingsPage').then(module => ({ default: module.SettingsPage })));
-import { Starfield } from './components/Starfield';
-import { AuraField } from './components/AuraField';
+// Canvas backgrounds are separate chunks so plain mode never downloads them.
+const Starfield = React.lazy(() => import('./components/Starfield').then(module => ({ default: module.Starfield })));
+const AuraField = React.lazy(() => import('./components/AuraField').then(module => ({ default: module.AuraField })));
 import { Sidebar } from './components/Sidebar';
 import { PublicDirectory } from './components/PublicDirectory';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -273,7 +274,11 @@ const AppContent: React.FC = () => {
       {isMobileNative() && <NativeBootstrap />}
       <div className="min-h-screen relative text-gray-900 dark:text-white/90 selection:bg-quantum-cyan/30">
         {/* Background Layer - Dynamic based on theme */}
-        {theme === 'dark' ? <Starfield animated={effectsLevel === 'full'} /> : <AuraField animated={effectsLevel === 'full'} />}
+        {effectsLevel !== 'plain' && (
+          <React.Suspense fallback={null}>
+            {theme === 'dark' ? <Starfield animated={effectsLevel === 'full'} /> : <AuraField animated={effectsLevel === 'full'} />}
+          </React.Suspense>
+        )}
 
         <React.Suspense fallback={
            <div className="flex items-center justify-center min-h-screen">

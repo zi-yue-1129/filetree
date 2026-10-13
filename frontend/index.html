@@ -33,6 +33,16 @@
 
     <!-- Mobile Theme Color -->
     <meta name="theme-color" content="#020205" />
+
+    <!-- Apply a stored effects level (e.g. plain 極簡) before the first paint; see src/lib/effects.ts -->
+    <script>
+      try {
+        var storedEffects = localStorage.getItem('filenexus-effects');
+        if (/^(full|low|plain)$/.test(storedEffects)) document.documentElement.dataset.effects = storedEffects;
+      } catch (error) {
+        console.error('Could not read the stored effects level', error);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

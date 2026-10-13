@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   });
   if (!values.label) throw new Error('--label is required');
   const effects = values.effects as EffectsSetting;
-  if (!['auto', 'full', 'low'].includes(effects)) throw new Error(`invalid --effects ${values.effects}`);
+  if (!['auto', 'full', 'low', 'plain'].includes(effects)) throw new Error(`invalid --effects ${values.effects}`);
   const python = process.env.PERF_PYTHON;
   if (!python) throw new Error('Set PERF_PYTHON to the backend virtualenv python');
   const scenarioNames = values.scenarios.split(',');

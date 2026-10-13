@@ -549,3 +549,88 @@ body {
 [data-effects="low"].dark .glass-header-premium {
   background-color: rgb(2 2 5 / 0.95);
 }
+
+/* ------------------------------------------------------------------------
+ * Plain mode 極簡 (<html data-effects="plain">, see src/lib/effects.ts).
+ * Keeps colours, borders, radii, icons, logo, static gradients and small
+ * shadows; removes only the effects with a real rendering cost. The canvas
+ * background is not mounted (its chunk is never loaded) and framer-motion
+ * animations complete instantly (EffectsContext).
+ * Unlayered on purpose so it wins over Tailwind utilities.
+ * ---------------------------------------------------------------------- */
+
+/* backdrop-filter re-blurs everything behind the element whenever content
+   scrolls or changes underneath it: the most expensive effect on phones. */
+[data-effects="plain"] *,
+[data-effects="plain"] *::before,
+[data-effects="plain"] *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* No keyframe animations (pulses, bounces, slow spins), except functional
+   loading spinners. */
+[data-effects="plain"] *:not(.animate-spin),
+[data-effects="plain"] *::before,
+[data-effects="plain"] *::after {
+  animation: none !important;
+}
+
+/* Transitions: only short colour/opacity changes, which are cheap to paint
+   or composite (no transform, size, layout or shadow transitions). */
+[data-effects="plain"] [class*="transition"]:not(.transition-none),
+[data-effects="plain"] .filenexus-brand {
+  transition-property: color, background-color, border-color, outline-color,
+    text-decoration-color, fill, stroke, opacity !important;
+  transition-duration: 120ms !important;
+  transition-delay: 0s !important;
+}
+
+/* Hover "lift" of cards: without its transition the instant 4px jump makes
+   the card flicker in and out of :hover when the pointer rests near an
+   edge, and it re-rasterizes the card (and its shadow) on every hover. */
+[data-effects="plain"] [class*="hover:-translate-y"]:hover {
+  translate: none !important;
+}
+
+/* Full-viewport noise texture (an SVG feTurbulence filter) behind the app. */
+[data-effects="plain"] body::before {
+  display: none;
+  background-image: none;
+}
+
+/* The light theme's backdrop came from the canvas; use the flat token. */
+[data-effects="plain"][data-theme="light"] body {
+  background-color: var(--color-light-bg);
+}
+
+/* Viewport-sized decorative radial glows: large overdraw, pure decoration. */
+[data-effects="plain"] .fx-glow {
+  display: none !important;
+}
+
+/* Large-radius and glow shadows (25-80px blur) are expensive to rasterize
+   on every repaint of their element; small shadows (sm/md/lg) are kept. */
+[data-effects="plain"] [class*="shadow-xl"],
+[data-effects="plain"] [class*="shadow-2xl"],
+[data-effects="plain"] [class*="shadow-[0_0"],
+[data-effects="plain"] .btn-stellar:hover {
+  box-shadow: none !important;
+}
+[data-effects="plain"] .glass-card {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08) !important;
+}
+
+/* Without backdrop blur, translucent glass panels get more opaque. */
+[data-effects="plain"] .glass-card-premium {
+  background-color: rgb(255 255 255 / 0.92);
+}
+[data-effects="plain"].dark .glass-card-premium {
+  background-color: rgb(6 6 14 / 0.92);
+}
+[data-effects="plain"] .glass-header-premium {
+  background-color: rgb(255 255 255 / 0.97);
+}
+[data-effects="plain"].dark .glass-header-premium {
+  background-color: rgb(2 2 5 / 0.97);
+}
