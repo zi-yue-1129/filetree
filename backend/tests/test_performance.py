@@ -271,3 +271,63 @@ def test_reconciliation_batches_index_repairs(client: TestClient, tmp_path: Path
     result = client.portal.call(FileService(tmp_path).reconcile_all_users)
     assert result == {"inserted": 10, "deleted": 1, "users_scanned": 1}
     assert not [sql for sql in statements if sql.startswith(("INSERT", "DELETE"))]
+
+
+@pytest.mark.parametrize(
+    ("database_name", "query", "parameters", "index_name"),
+    [
+        ("files_db", "SELECT * FROM files WHERE username=? AND folder_id=?", ("user", "folder"), "idx_files_username_folder"),
+        ("notes_db", "SELECT * FROM urls WHERE username=? AND folder_id=?", ("user", "folder"), "idx_urls_username_folder"),
+        ("notes_db", "SELECT * FROM urls WHERE username=? ORDER BY created DESC", ("user",), "idx_urls_username_created"),
+        ("users_db", "SELECT * FROM folders WHERE user_id=? AND parent_id=?", (1, "folder"), "idx_folders_user_parent"),
+    ],
+)
+def test_hot_query_uses_covering_filter_index(client: TestClient, database_name: str, query: str, parameters: tuple[Any, ...], index_name: str) -> None:
+    """Hot folder filters use both keys and note listing avoids temporary sorting."""
+    with sqlite3.connect(getattr(settings.paths, database_name)) as database:
+        plan = [row[3] for row in database.execute("EXPLAIN QUERY PLAN " + query, parameters)]
+    assert any(index_name in description for description in plan)
+    assert not any("TEMP B-TREE" in description for description in plan)
+
+
+def test_hash_reads_in_bounded_large_blocks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep SHA-256 exact while avoiding millions of tiny reads for large uploads."""
+    import hashlib
+    from backend.services.dedup_service import DedupService
+
+    path = tmp_path / "hash-input.bin"
+    content = bytes(range(256)) * (16 * 1024)
+    path.write_bytes(content)
+    read_sizes: list[int] = []
+    original_open = Path.open
+
+    class RecordingReader:
+        """Read a real file while recording requested buffer sizes."""
+
+        def __init__(self, wrapped: Any) -> None:
+            """Retain the file object."""
+            self.wrapped = wrapped
+
+        def __enter__(self) -> "RecordingReader":
+            """Enter the underlying context."""
+            self.wrapped.__enter__()
+            return self
+
+        def __exit__(self, *arguments: Any) -> None:
+            """Close the underlying context."""
+            self.wrapped.__exit__(*arguments)
+
+        def read(self, size: int) -> bytes:
+            """Record a read while forwarding to the file."""
+            read_sizes.append(size)
+            return self.wrapped.read(size)
+
+    def recorded_open(source: Path, *arguments: Any, **keywords: Any) -> Any:
+        """Wrap only the measured hash input."""
+        opened = original_open(source, *arguments, **keywords)
+        return RecordingReader(opened) if source == path else opened
+
+    monkeypatch.setattr(Path, "open", recorded_open)
+    digest = DedupService().calculate_hash(path)
+    assert digest == hashlib.sha256(content).hexdigest()
+    assert read_sizes and len(read_sizes) <= 5
