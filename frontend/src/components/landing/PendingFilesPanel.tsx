@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { Database, FileText, X, Clock, TrendingUp, FileUp } from 'lucide-react';
 import type { UppyFile } from '@uppy/core';
 
@@ -26,12 +26,12 @@ const formatBytes = (bytes: number) => {
 const formatDuration = (seconds: number) => {
   if (seconds === null || seconds === undefined || isNaN(seconds)) return '--';
   if (seconds === Infinity) return 'Calculating...';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
 };
 
 const PendingFilesPanelView: React.FC<PendingFilesPanelProps> = ({
@@ -50,7 +50,7 @@ const PendingFilesPanelView: React.FC<PendingFilesPanelProps> = ({
       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pl-1 relative z-10">
         <AnimatePresence mode="popLayout">
           {pendingFiles.length === 0 ? (
-            <motion.div
+            <m.div
               key="empty-files"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -65,10 +65,10 @@ const PendingFilesPanelView: React.FC<PendingFilesPanelProps> = ({
                 <br />
                 至任意處
               </p>
-            </motion.div>
+            </m.div>
           ) : (
             pendingFiles.map((file) => (
-              <motion.div
+              <m.div
                 key={file.id}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -139,7 +139,7 @@ const PendingFilesPanelView: React.FC<PendingFilesPanelProps> = ({
                     </p>
                   ) : null}
                 </div>
-              </motion.div>
+              </m.div>
             ))
           )}
         </AnimatePresence>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { SecurityInitializationModal } from '../components/SecurityInitializationModal';
 import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -769,7 +769,7 @@ const UserPageView: React.FC<UserPageProps> = ({
             {isSidebarOpen && (
               <>
                 {!isDesktop && (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -777,7 +777,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                     className="fixed inset-0 bg-black/50 z-30 lg:hidden"
                   />
                 )}
-                <motion.div
+                <m.div
                   initial={{ width: 0, opacity: 0, x: -20 }}
                   animate={{ width: "auto", opacity: 1, x: 0 }}
                   exit={{ width: 0, opacity: 0, x: -20 }}
@@ -803,7 +803,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                     onMoveItem={handleMoveItem}
                     onClose={() => setIsSidebarOpen(false)}
                   />
-                </motion.div>
+                </m.div>
               </>
             )}
           </AnimatePresence>
@@ -811,7 +811,7 @@ const UserPageView: React.FC<UserPageProps> = ({
 
         <AnimatePresence mode="wait">
           {activeTab === 'files' ? (
-            <motion.div
+            <m.div
               key="files"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -862,9 +862,9 @@ const UserPageView: React.FC<UserPageProps> = ({
                 onToggleFolderLock={onToggleItemLock}
                 isDesktop={isDesktop}
               />
-            </motion.div>
+            </m.div>
           ) : (
-            <motion.div
+            <m.div
               key="urls"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -910,14 +910,14 @@ const UserPageView: React.FC<UserPageProps> = ({
                 onPreview={onPreviewItem}
                 isDesktop={isDesktop}
               />
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </main>
 
       <AnimatePresence>
         {isPacking && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -925,7 +925,7 @@ const UserPageView: React.FC<UserPageProps> = ({
           >
             <div className="bg-white dark:bg-space-black p-8 rounded-3xl shadow-2xl border border-white/10 flex flex-col items-center gap-6">
               <div className="relative">
-                <motion.div
+                <m.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                   className="w-16 h-16 border-4 border-violet-500/20 border-t-violet-500 rounded-full"
@@ -936,19 +936,19 @@ const UserPageView: React.FC<UserPageProps> = ({
                 <p className="text-sm text-gray-500 dark:text-gray-400">請稍候，我們正在為您打包選中的資源</p>
               </div>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showAuthModal && (
-          <motion.div
+          <m.div
              initial={{ opacity: 0 }}
              animate={{ opacity: 1 }}
              exit={{ opacity: 0 }}
              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           >
-             <motion.div
+             <m.div
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
@@ -984,21 +984,21 @@ const UserPageView: React.FC<UserPageProps> = ({
                       </button>
                    </div>
                 </form>
-             </motion.div>
-          </motion.div>
+             </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {qrUrl && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
             onClick={() => setQrUrl(null)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.5, rotateY: 90 }}
               animate={{ scale: 1, rotateY: 0 }}
               exit={{ scale: 0.5, rotateY: 90 }}
@@ -1028,22 +1028,22 @@ const UserPageView: React.FC<UserPageProps> = ({
                   複製連結
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {shareUrl && (
              <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
-               <motion.div
+               <m.div
                    initial={{ opacity: 0 }}
                    animate={{ opacity: 1 }}
                    exit={{ opacity: 0 }}
                    onClick={() => setShareUrl(null)}
                    className="absolute inset-0 bg-white/80 dark:bg-space-black/80 backdrop-blur-md"
                />
-               <motion.div
+               <m.div
                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
                    animate={{ opacity: 1, scale: 1, y: 0 }}
                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -1082,14 +1082,14 @@ const UserPageView: React.FC<UserPageProps> = ({
                            關閉
                        </button>
                    </div>
-               </motion.div>
+               </m.div>
              </div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showSettingsModal && (
-            <motion.div
+            <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -1128,7 +1128,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                         </div>
                     </div>
                 </div>
-            </motion.div>
+            </m.div>
         )}
       </AnimatePresence>
 

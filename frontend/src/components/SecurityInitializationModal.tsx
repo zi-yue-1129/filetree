@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { ShieldCheck } from 'lucide-react';
 import { apiUrl } from '../services/api';
 
@@ -53,13 +53,13 @@ export const SecurityInitializationModal: React.FC<SecurityInitializationModalPr
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-white/95 dark:bg-space-black/95 backdrop-blur-2xl"
           />
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -95,7 +95,7 @@ export const SecurityInitializationModal: React.FC<SecurityInitializationModalPr
                 {isSyncing ? "部署中..." : "確認更新密鑰"}
               </button>
             </form>
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>

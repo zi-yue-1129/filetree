@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { MotionConfig } from 'framer-motion';
+import { LazyMotion, MotionConfig, type FeatureBundle } from 'framer-motion';
 import {
   applyEffectsLevel,
   probeSlowFrames,
@@ -11,6 +11,25 @@ import {
   type LowPowerReason,
 } from '../lib/effects';
 import { EffectsContext } from './effectsContextValue';
+
+/**
+ * Load the framer-motion feature bundle as a separate chunk.
+ *
+ * A failed load (e.g. a stale deploy removed the chunk) is logged and
+ * re-thrown so it surfaces instead of silently leaving animations dead.
+ *
+ * Returns:
+ *   The feature bundle to register with `LazyMotion`.
+ */
+function loadMotionFeatures(): Promise<FeatureBundle> {
+  return import('../lib/motionFeatures').then(
+    (module) => module.default,
+    (error: unknown) => {
+      console.error('Failed to load animation features', error);
+      throw error;
+    },
+  );
+}
 
 /**
  * Provides the visual-effects level, mirrors it on `<html data-effects>` and
@@ -59,7 +78,11 @@ export const EffectsProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <EffectsContext.Provider value={value}>
-      <MotionConfig reducedMotion={level === 'low' ? 'always' : 'user'}>{children}</MotionConfig>
+      {/* `strict` makes any leftover eager `motion.*` component throw, which
+          would silently pull the full animation engine back into the entry. */}
+      <LazyMotion features={loadMotionFeatures} strict>
+        <MotionConfig reducedMotion={level === 'low' ? 'always' : 'user'}>{children}</MotionConfig>
+      </LazyMotion>
     </EffectsContext.Provider>
   );
 };

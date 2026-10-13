@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { FileUp, ShieldCheck, HelpCircle, Sun, Moon, Smartphone, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { isMobileNative } from '../native';
@@ -71,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
 
       {/* Mobile Overlay */}
       {isOpen && !isDesktop && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

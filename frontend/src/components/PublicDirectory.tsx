@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { Users, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -47,7 +47,7 @@ export const PublicDirectory: React.FC<PublicDirectoryProps> = ({
       {/* Mobile Overlay */}
       <AnimatePresence>
         {isOpen && !isDesktop && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -85,7 +85,7 @@ export const PublicDirectory: React.FC<PublicDirectoryProps> = ({
               users.map((user, idx) => {
                 const isSelected = currentUsername === user.username;
                 return (
-                  <motion.button
+                  <m.button
                     key={user.username}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -118,7 +118,7 @@ export const PublicDirectory: React.FC<PublicDirectoryProps> = ({
                       "w-4 h-4 shrink-0 transition-all",
                       isSelected ? "text-cyan-400 dark:text-quantum-cyan/50" : "text-gray-300 dark:text-white/5 group-hover/item:text-cyan-300 dark:group-hover/item:text-quantum-cyan/30"
                     )} />
-                  </motion.button>
+                  </m.button>
                 );
               })
             ) : (

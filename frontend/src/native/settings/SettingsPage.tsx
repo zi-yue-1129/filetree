@@ -3,7 +3,7 @@
  * backup, upload queue, versions and updates.
  */
 import React from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Settings } from 'lucide-react';
 import { useNativeConfiguration } from '../hooks';
 import { isMobileNative } from '../index';
@@ -29,7 +29,7 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-8rem)] overflow-x-hidden custom-scrollbar">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
+      <m.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
         <div className="flex items-center justify-center gap-4 mb-2">
           <div className="p-3 bg-quantum-cyan/10 rounded-2xl border border-quantum-cyan/20">
             <Settings className="w-8 h-8 text-cyan-600 dark:text-quantum-cyan" />
@@ -38,7 +38,7 @@ export const SettingsPage: React.FC = () => {
             App <span className="text-quantum-cyan">設定</span>
           </h1>
         </div>
-      </motion.div>
+      </m.div>
       <div className="max-w-3xl mx-auto space-y-6 pb-20">
         {config.error && <Message tone="error">{config.error}</Message>}
         <DeviceSection config={config.data} onChanged={config.refresh} />

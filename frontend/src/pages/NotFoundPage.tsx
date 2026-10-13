@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Ghost, Home, RefreshCw } from 'lucide-react';
 
 interface MemeData {
@@ -49,7 +49,7 @@ export const NotFoundPage: React.FC = () => {
             <div className="absolute top-1/4 -left-20 w-[60vw] h-[50vh] fx-glow text-violet-500/10 -z-10" />
             <div className="absolute bottom-1/4 -right-20 w-[70vw] h-[60vh] fx-glow text-cyan-500/10 -z-10" />
 
-            <motion.div
+            <m.div
                 initial={{ opacity: 0, y: 30, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -57,7 +57,7 @@ export const NotFoundPage: React.FC = () => {
             >
                 {/* Header */}
                 <div className="space-y-4">
-                    <motion.div
+                    <m.div
                         animate={{
                             y: [0, -10, 0],
                             rotate: [0, 5, -5, 0]
@@ -69,7 +69,7 @@ export const NotFoundPage: React.FC = () => {
                         }}
                     >
                         <Ghost className="w-20 h-20 sm:w-24 sm:h-24 text-violet-500 dark:text-neural-violet mx-auto" />
-                    </motion.div>
+                    </m.div>
 
                     <h1 className="text-6xl sm:text-8xl font-black text-gray-900 dark:text-white tracking-tighter">
                         4<span className="text-violet-500 dark:text-neural-violet">0</span>4
@@ -91,7 +91,7 @@ export const NotFoundPage: React.FC = () => {
                             <p>無法載入梗圖，請重試</p>
                         </div>
                     ) : meme && (
-                        <motion.div
+                        <m.div
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             className="space-y-3"
@@ -107,7 +107,7 @@ export const NotFoundPage: React.FC = () => {
                             <p className="text-xs text-gray-400 dark:text-white/30 font-medium truncate px-4">
                                 {meme.title} • r/{meme.subreddit}
                             </p>
-                        </motion.div>
+                        </m.div>
                     )}
 
                     <button
@@ -130,7 +130,7 @@ export const NotFoundPage: React.FC = () => {
                         返回首頁
                     </a>
                 </div>
-            </motion.div>
+            </m.div>
         </div>
     );
 };

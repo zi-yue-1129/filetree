@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { X, Download, FileText, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getFileType } from '../lib/file-utils';
@@ -223,7 +223,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
     <AnimatePresence>
       {isOpen && file && (
         <div className="fixed inset-0 z-150 flex items-center justify-center p-4 sm:p-6">
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -231,7 +231,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
             className="absolute inset-0 bg-space-black/95 backdrop-blur-xl"
           />
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -291,7 +291,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
               />
             </div>
 
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>
