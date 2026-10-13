@@ -3,6 +3,23 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 
+test('changing server removes the previous server credentials and unlock sessions', async () => {
+  const { outputFiles } = await build({
+    entryPoints: ['../frontend/src/native/desktop/settings.ts'],
+    bundle: true, format: 'esm', write: false,
+  });
+  const settings = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`);
+  const local = new Map([['filenexus_token', 'old-secret'], ['filenexus_user', 'old-user'], ['theme', 'dark']]);
+  const session = new Map([['unlocked_alice', 'secret'], ['unrelated', 'keep']]);
+  settings.clearDesktopAuthentication({ removeItem: (key) => local.delete(key) }, {
+    length: session.size,
+    key: (index) => [...session.keys()][index] ?? null,
+    removeItem: (key) => session.delete(key),
+  });
+  assert.deepEqual([...local], [['theme', 'dark']]);
+  assert.deepEqual([...session], [['unrelated', 'keep']]);
+});
+
 test('only hidden/unfocused per-user REFRESH events notify, without replacing app handlers', async () => {
   const { outputFiles } = await build({
     entryPoints: ['../frontend/src/native/desktop/notifications.ts'],

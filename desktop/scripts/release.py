@@ -27,23 +27,30 @@ def platform_manifest(root: Path, platform: str, version: str) -> dict[str, Any]
     Raises:
         ValueError: An updater bundle or its signature is missing or ambiguous.
     """
-    patterns = {"windows": "*-setup.exe", "macos": "*.app.tar.gz", "linux": "*.AppImage"}
-    platform_keys = {"windows": ["windows-x86_64"],
-                     "macos": ["darwin-x86_64", "darwin-aarch64"],
-                     "linux": ["linux-x86_64"]}
-    matches = list(root.glob(patterns[platform]))
-    if len(matches) != 1:
-        raise ValueError(f"Expected one {platform} updater bundle, found {len(matches)}")
-    bundle = matches[0]
-    signature_path = bundle.with_name(bundle.name + ".sig")
-    if not signature_path.is_file():
-        raise ValueError(f"Missing updater signature: {signature_path.name}")
-    signature = signature_path.read_text(encoding="utf-8").strip()
-    if not signature:
-        raise ValueError(f"Empty updater signature: {signature_path.name}")
-    entry = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{version}/{quote(bundle.name)}",
-             "signature": signature}
-    return {"version": version, "platforms": {key: entry for key in platform_keys[platform]}}
+    formats = {
+        "windows": [("*-setup.exe", ["windows-x86_64", "windows-x86_64-nsis"]),
+                    ("*.msi", ["windows-x86_64-msi"])],
+        "macos": [("*.app.tar.gz", ["darwin-x86_64", "darwin-aarch64",
+                                    "darwin-x86_64-app", "darwin-aarch64-app"])],
+        "linux": [("*.AppImage", ["linux-x86_64", "linux-x86_64-appimage"]),
+                  ("*.deb", ["linux-x86_64-deb"])],
+    }
+    platforms: dict[str, Any] = {}
+    for pattern, keys in formats[platform]:
+        matches = list(root.glob(pattern))
+        if len(matches) != 1:
+            raise ValueError(f"Expected one {platform} {pattern} updater bundle, found {len(matches)}")
+        bundle = matches[0]
+        signature_path = bundle.with_name(bundle.name + ".sig")
+        if not signature_path.is_file():
+            raise ValueError(f"Missing updater signature: {signature_path.name}")
+        signature = signature_path.read_text(encoding="utf-8").strip()
+        if not signature:
+            raise ValueError(f"Empty updater signature: {signature_path.name}")
+        entry = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{version}/{quote(bundle.name)}",
+                 "signature": signature}
+        platforms.update({key: entry for key in keys})
+    return {"version": version, "platforms": platforms}
 
 
 def merge_manifests(manifests: list[dict[str, Any]], version: str, notes: str) -> dict[str, Any]:

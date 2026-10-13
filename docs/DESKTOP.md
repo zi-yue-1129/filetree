@@ -115,5 +115,5 @@ VITE_API_BASE_URL=https://api.example.com npm --prefix desktop run prepare:front
 若要在本機建置簽章安裝檔，先設定上述金鑰環境變數、`DESKTOP_VERSION`、
 `DESKTOP_RELEASE=true`、`CONFIGURED_API_URL`（與正式 API origin 相同），執行
 `python3 desktop/scripts/prepare.py`，再執行
-`npm --prefix desktop run build -- --config src-tauri/ci.conf.json --locked`。
+`npm --prefix desktop run build -- --config src-tauri/ci.conf.json -- --locked`。
 沒有 WebKitGTK 的 Linux 開發機可驗證 TS、前端、Rust 格式；原生編譯交由 CI。

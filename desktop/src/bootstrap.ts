@@ -1,5 +1,6 @@
 /** Inject native services before the shared React application evaluates. */
 import { installDesktopNotifications } from '../../frontend/src/native/desktop/notifications';
+import { clearDesktopAuthentication } from '../../frontend/src/native/desktop/settings';
 
 /** Report desktop errors to Rust and to a native dialog, including reporting failures. */
 async function reportError(error: unknown): Promise<void> {
@@ -76,6 +77,11 @@ async function openSettings(): Promise<void> {
         if (!['http:', 'https:'].includes(url.protocol) || url.origin !== origin) {
           throw new Error('Server URL must be an HTTP(S) origin without a path, credentials, or query');
         }
+      }
+      // Clear authentication before persisting the new origin so no subsequent
+      // launch can transmit the previous server's credentials to another host.
+      clearDesktopAuthentication(localStorage, sessionStorage);
+      if (origin) {
         await store.set('serverUrl', origin);
       } else {
         await store.delete('serverUrl');

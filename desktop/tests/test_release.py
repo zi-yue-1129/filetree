@@ -28,7 +28,7 @@ class ReleaseTests(unittest.TestCase):
             (root / "FileNexus.app.tar.gz.sig").write_text("signed-content")
             manifest = self.release.platform_manifest(root, "macos", "1.2.3")
             self.assertEqual(set(manifest["platforms"]),
-                             {"darwin-aarch64", "darwin-x86_64"})
+                             {"darwin-aarch64", "darwin-x86_64", "darwin-aarch64-app", "darwin-x86_64-app"})
             self.assertEqual(manifest["platforms"]["darwin-aarch64"],
                              manifest["platforms"]["darwin-x86_64"])
 
@@ -39,6 +39,31 @@ class ReleaseTests(unittest.TestCase):
             (root / "FileNexus-setup.exe").write_bytes(b"installer")
             with self.assertRaisesRegex(ValueError, "signature"):
                 self.release.platform_manifest(root, "windows", "1.2.3")
+
+    def test_linux_formats_have_matching_signed_bundles(self) -> None:
+        """Deb installations must never receive AppImage bytes during an update."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ["FileNexus.AppImage", "FileNexus.deb"]:
+                (root / name).write_bytes(b"installer")
+                (root / (name + ".sig")).write_text(name + " signature")
+            manifest = self.release.platform_manifest(root, "linux", "1.2.3")
+            platforms = manifest["platforms"]
+            self.assertTrue(platforms["linux-x86_64-appimage"]["url"].endswith(".AppImage"))
+            self.assertTrue(platforms["linux-x86_64-deb"]["url"].endswith(".deb"))
+            self.assertEqual(platforms["linux-x86_64-deb"]["signature"], "FileNexus.deb signature")
+
+    def test_windows_formats_have_matching_signed_bundles(self) -> None:
+        """MSI and NSIS installations retain their original installer format."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ["FileNexus-setup.exe", "FileNexus.msi"]:
+                (root / name).write_bytes(b"installer")
+                (root / (name + ".sig")).write_text(name + " signature")
+            manifest = self.release.platform_manifest(root, "windows", "1.2.3")
+            platforms = manifest["platforms"]
+            self.assertTrue(platforms["windows-x86_64-nsis"]["url"].endswith(".exe"))
+            self.assertTrue(platforms["windows-x86_64-msi"]["url"].endswith(".msi"))
 
     def test_duplicate_platform_fails(self) -> None:
         """Merging must reject conflicting platform ownership."""

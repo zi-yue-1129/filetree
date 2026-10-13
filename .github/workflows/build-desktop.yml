@@ -98,7 +98,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
-          args: ${{ matrix.args }} --config src-tauri/ci.conf.json --locked
+          args: ${{ matrix.args }} --config src-tauri/ci.conf.json -- --locked
           includeUpdaterJson: false
           retryAttempts: 0
       - name: Collect bundles and signed updater metadata
