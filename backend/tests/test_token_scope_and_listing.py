@@ -397,6 +397,6 @@ def test_verify_ownership_rejects_share_tokens(seeded_client: TestClient) -> Non
     """The ownership helper treats share tokens as non-owners."""
     share_for_user = token_service.create_token(USERNAME, SHARED_FILE)
     with pytest.raises(HTTPException) as denied:
-        verify_ownership(share_for_user, USERNAME)
+        seeded_client.portal.call(verify_ownership, share_for_user, USERNAME)
     assert denied.value.status_code == 403
-    assert verify_ownership(token_service.create_session_token(USERNAME), USERNAME)
+    assert seeded_client.portal.call(verify_ownership, token_service.create_session_token(USERNAME), USERNAME)
