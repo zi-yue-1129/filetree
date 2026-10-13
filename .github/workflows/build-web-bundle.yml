@@ -1,0 +1,107 @@
+# Live-update web bundle for the Android/iOS apps (contract §4).
+# Release mode (workflow_call with `version`): builds the frontend with the
+# production API URL, zips it (index.html at zip root) and uploads
+# web-bundle-<ver>.zip + web-bundle.json to the draft release v<ver>.
+# Test mode (push to feat/native-mobile / manual dispatch): workflow artifact only.
+name: build-web-bundle
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version X.Y.Z (tag without the leading v)
+        required: true
+        type: string
+  workflow_dispatch:
+  push:
+    branches: [feat/native-mobile]
+    paths:
+      - frontend/**
+      - .github/workflows/build-web-bundle.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-web-bundle-${{ inputs.version || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
+jobs:
+  web-bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::version must be X.Y.Z, got '$RELEASE_VERSION'"; exit 1
+            fi
+            echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [[ -z "$VITE_API_BASE_URL" ]]; then
+            echo "::error::Repository variable VITE_API_BASE_URL is not set"; exit 1
+          fi
+          npm run build
+
+      - name: Package bundle and manifest
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/web-bundle"
+          mkdir -p "$out"
+          zip_name="web-bundle-${VERSION}.zip"
+          # index.html must sit at the zip root (Capgo requirement).
+          (cd ../static/dist && zip -qr -X "$out/$zip_name" .)
+          sha256=$(sha256sum "$out/$zip_name" | cut -d' ' -f1)
+          min_native=$(node -p "require('./package.json').filenexus.minNativeVersion")
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${zip_name}"
+          jq -n --arg version "$VERSION" --arg url "$url" --arg sha256 "$sha256" --arg min "$min_native" \
+            '{version: $version, url: $url, sha256: $sha256, minNativeVersion: $min}' > "$out/web-bundle.json"
+          cat "$out/web-bundle.json"
+
+      - name: Upload to release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release upload "v${VERSION}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$RUNNER_TEMP/web-bundle/web-bundle-${VERSION}.zip" \
+            "$RUNNER_TEMP/web-bundle/web-bundle.json"
+
+      - name: Upload test artifact
+        if: steps.version.outputs.release != 'true'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: web-bundle-${{ steps.version.outputs.version }}
+          path: ${{ runner.temp }}/web-bundle/
+          if-no-files-found: error
+          retention-days: 14

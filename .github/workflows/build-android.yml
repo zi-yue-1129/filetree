@@ -1,0 +1,154 @@
+# Android APK (contract §4).
+# Release mode (workflow_call with `version`): signed release APK from the
+# ANDROID_* secrets, uploaded with android.json to the draft release v<ver>.
+# Test mode (push to feat/native-mobile / manual dispatch): debug-signed APK
+# plus plugin unit tests, uploaded as a workflow artifact only.
+name: build-android
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version X.Y.Z (tag without the leading v)
+        required: true
+        type: string
+  workflow_dispatch:
+  push:
+    branches: [feat/native-mobile]
+    paths:
+      - frontend/**
+      - .github/workflows/build-android.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-android-${{ inputs.version || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v4.0.4
+        with:
+          packages: platform-tools platforms;android-36 build-tools;35.0.0
+
+      - uses: gradle/actions/setup-gradle@v6.4.0
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            if [[ ! "$RELEASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "::error::version must be X.Y.Z, got '$RELEASE_VERSION'"; exit 1
+            fi
+            echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            # Test builds: fixed low native version so any release supersedes them.
+            echo "version=0.0.1" >> "$GITHUB_OUTPUT"
+            echo "web_version=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - run: npm ci
+
+      - name: Build web assets
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_APP_VERSION: ${{ steps.version.outputs.web_version || steps.version.outputs.version }}
+        run: |
+          if [[ -z "$VITE_API_BASE_URL" ]]; then
+            echo "::error::Repository variable VITE_API_BASE_URL is not set"; exit 1
+          fi
+          npm run build
+          npx cap sync android
+
+      - name: Firebase config (optional)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [[ -n "$GOOGLE_SERVICES_JSON" ]]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "Push enabled (google-services.json written)"
+          else
+            echo "::notice::GOOGLE_SERVICES_JSON secret not set; building without FCM push"
+          fi
+
+      - name: Test build (debug signing)
+        if: steps.version.outputs.release != 'true'
+        working-directory: frontend/android
+        run: ./gradlew --no-daemon assembleDebug :filenexus-native:testDebugUnitTest -PappVersion=${{ steps.version.outputs.version }}
+
+      - name: Upload test artifact
+        if: steps.version.outputs.release != 'true'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: FileNexus-debug-${{ github.run_number }}
+          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Release build (signed)
+        if: steps.version.outputs.release == 'true'
+        working-directory: frontend/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then echo "::error::Secret $name is not set"; exit 1; fi
+          done
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_FILE"
+          ./gradlew --no-daemon assembleRelease :filenexus-native:testDebugUnitTest -PappVersion="$VERSION"
+          rm -f "$ANDROID_KEYSTORE_FILE"
+          apk=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk"
+          mkdir -p "$RUNNER_TEMP/android"
+          cp "$apk" "$RUNNER_TEMP/android/FileNexus-${VERSION}.apk"
+
+      - name: Write android.json and upload to release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          IFS=. read -r major minor patch <<< "$VERSION"
+          version_code=$((major * 10000 + minor * 100 + patch))
+          apk="$RUNNER_TEMP/android/FileNexus-${VERSION}.apk"
+          sha256=$(sha256sum "$apk" | cut -d' ' -f1)
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/FileNexus-${VERSION}.apk"
+          notes=$(gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" --json body --jq '.body' | head -c 1500)
+          jq -n --arg version "$VERSION" --argjson versionCode "$version_code" --arg url "$url" \
+            --arg sha256 "$sha256" --arg notes "${notes:-FileNexus $VERSION}" \
+            '{version: $version, versionCode: $versionCode, url: $url, sha256: $sha256, notes: $notes}' \
+            > "$RUNNER_TEMP/android/android.json"
+          cat "$RUNNER_TEMP/android/android.json"
+          gh release upload "v${VERSION}" --repo "$GITHUB_REPOSITORY" --clobber \
+            "$apk" "$RUNNER_TEMP/android/android.json"

@@ -11,6 +11,11 @@ import Tus from '@uppy/tus';
 
 // Uppy styles
 import '@uppy/core/css/style.min.css';
+import { apiUrl } from '../services/api';
+import { getErrorMessage, isMobileNative, pickNativeFiles } from '../native';
+import type { NativeFile } from '../native';
+import { NativePendingFilesPanel } from '../native/landing/NativePendingFilesPanel';
+import { enqueueLandingFiles } from '../native/landing/landingUpload';
 
 interface LandingPageProps {
   data: {
@@ -33,6 +38,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
   // eslint-disable-next-line
   const [pendingFiles, setPendingFiles] = useState<import('@uppy/core').UppyFile<any, any>[]>([]); 
   
+  // Native apps: files come from the system picker and upload in the background.
+  const nativeMode = isMobileNative();
+  const [nativeFiles, setNativeFiles] = useState<NativeFile[]>([]);
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [firstLoginUserInfo, setFirstLoginUserInfo] = useState<{ username: string, oldPwd: string } | null>(null);
   const [redirectPath, setRedirectPath] = useState<string | null>(null);
@@ -63,7 +72,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
 
     try {
         u.use(Tus, {
-        endpoint: '/api/upload/tus',
+        endpoint: apiUrl('/api/upload/tus'),
         chunkSize: 5 * 1024 * 1024,
         retryDelays: [0, 1000, 3000, 5000],
         removeFingerprintOnSuccess: true,
@@ -172,6 +181,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     }
   };
 
+  const handleNativePick = () => {
+    pickNativeFiles()
+      .then((files) => setNativeFiles((previous) => [...previous, ...files]))
+      .catch((err: unknown) => {
+        console.error('Native file picker failed', err);
+        alert(`無法選擇檔案：${getErrorMessage(err)}`);
+      });
+  };
+
   const handleAddNote = () => {
     const trimmed = inputText.trim();
     if (trimmed) {
@@ -204,8 +222,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     }
 
     const hasFiles = uppy && uppy.getFiles().length > 0;
+    const hasNativeFiles = nativeMode && nativeFiles.length > 0;
 
-    if (finalNotes.length === 0 && !hasFiles) {
+    if (finalNotes.length === 0 && !hasFiles && !hasNativeFiles) {
       alert('請輸入文字或加入檔案');
       return;
     }
@@ -213,6 +232,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     setIsSyncing(true);
 
     try {
+      // 1a. Native apps: hand picked files to the background upload queue.
+      let nativeUploadUser: string | null = null;
+      if (hasNativeFiles) {
+        nativeUploadUser = await enqueueLandingFiles(nativeFiles);
+        setNativeFiles([]);
+      }
+
       // 1. Upload Files
       if (hasFiles && uppy) {
         const result = await uppy.upload();
@@ -229,7 +255,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
            const body = new FormData();
            body.append('url', note);
            body.append('password', password);
-           const res = await fetch('/api/upload_url', { method: 'POST', body });
+           const res = await fetch(apiUrl('/api/upload_url'), { method: 'POST', body });
            if (!res.ok) {
              const err = await res.json();
              throw new Error(`筆記上傳失敗: ${note} - ${err.detail}`);
@@ -240,10 +266,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
       // 3. Login & Redirect
       const body = new FormData();
       body.append('password', password);
-      const res = await fetch('/api/login', { method: 'POST', body });
+      const res = await fetch(apiUrl('/api/login'), { method: 'POST', body });
       
       if (res.ok) {
         const user = await res.json();
+        if (hasNativeFiles && nativeUploadUser && nativeUploadUser !== user.username) {
+          alert(`檔案正在背景上傳到此裝置登入的帳號「${nativeUploadUser}」`);
+        }
         if (user.first_login) {
           setFirstLoginUserInfo({ username: user.username, oldPwd: password });
           setRedirectPath(`/${user.username}`);
@@ -481,6 +510,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
               setPassword={setPassword}
               onSubmit={handleSubmit}
               isSyncing={isSyncing}
+              onNativePickFiles={nativeMode ? handleNativePick : undefined}
            />
         </div>
 
@@ -490,10 +520,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
             Desktop: Order 3. Width ~19vw (Refined). Full Height.
         */}
         <div className="order-3 2xl:order-3 w-full 2xl:w-[22vw] xl:w-[19vw] 2xl:min-w-55 2xl:max-w-112.5 flex flex-col h-auto min-h-50 max-h-[50vh] 2xl:h-[80vh] 2xl:max-h-212.5 transition-opacity duration-300 2xl:opacity-60 2xl:hover:opacity-100 min-w-0 shrink pb-10 2xl:pb-0">
+           {nativeMode ? (
+             <NativePendingFilesPanel
+                files={nativeFiles}
+                onRemove={(index) => setNativeFiles((previous) => previous.filter((_, i) => i !== index))}
+             />
+           ) : (
            <PendingFilesPanel 
               pendingFiles={pendingFiles} 
               onRemoveFile={handleRemoveFile} 
            />
+           )}
         </div>
 
       </div>

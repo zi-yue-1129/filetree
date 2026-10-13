@@ -42,7 +42,7 @@ class PathConfig(BaseModel):
     files_db: Path = Path("data/files.db")
 
     @model_validator(mode='after')
-    def resolve_relative_paths(self):
+    def resolve_relative_paths(self) -> "PathConfig":
         """Ensure all paths are absolute, resolving relative ones against PROJECT_ROOT."""
         for field_name in self.model_fields:
             value = getattr(self, field_name)
@@ -80,12 +80,19 @@ class RateLimitConfig(BaseModel):
 
 
 
+class PushConfig(BaseModel):
+    """Optional Android FCM service-account configuration."""
+
+    fcm_service_account_file: Optional[Path] = None
+
+
 class Config(BaseSettings):
     """Global configuration object."""
     server: ServerConfig = ServerConfig()
     paths: PathConfig = PathConfig()
     security: SecurityConfig = SecurityConfig()
     logic: LogicConfig = LogicConfig()
+    push: PushConfig = PushConfig()
 
     rate_limit: RateLimitConfig = RateLimitConfig()
 

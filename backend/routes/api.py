@@ -5,7 +5,8 @@ Refactored from monolithic api.py.
 """
 
 from fastapi import APIRouter
-from backend.routes import auth, users, files, admin, ws
+
+from backend.routes import admin, auth, devices, files, folders, users, ws
 
 # Create the main API router with /api prefix
 router = APIRouter(prefix="/api")
@@ -17,3 +18,6 @@ router.include_router(users.router, tags=["Users"])
 router.include_router(files.router, tags=["Files"])
 router.include_router(admin.router, tags=["Admin"])
 router.include_router(ws.router, tags=["WebSockets"])
+
+router.include_router(devices.router, tags=["Devices"])
+router.include_router(folders.router, tags=["Folders"])

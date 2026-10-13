@@ -5,7 +5,7 @@ import { SecurityInitializationModal } from '../components/SecurityInitializatio
 import { X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../lib/utils';
-import { apiRequest, apiPostForm } from '../services/api';
+import { apiRequest, apiPostForm, apiUrl, API_ORIGIN } from '../services/api';
 import { FilePreviewModal } from '../components/FilePreviewModal';
 import { FileView } from '../components/dashboard/FileView';
 import { UrlView } from '../components/dashboard/UrlView';
@@ -265,7 +265,7 @@ export const UserPage: React.FC<UserPageProps> = ({
 
         setIsPacking(true);
         try {
-          const res = await fetch(`/api/user/${dashboardData.user?.username}/batch-download`, {
+          const res = await fetch(apiUrl(`${API_ORIGIN}/api/user/${dashboardData.user?.username}/batch-download`), {
             method: 'POST',
             body: formData
           });
@@ -555,12 +555,26 @@ export const UserPage: React.FC<UserPageProps> = ({
     }
   };
 
+  /** Mint a per-file share token and return its public share-page URL. */
+  const createShareUrl = async (filename: string): Promise<string> => {
+    const formData = new FormData();
+    if (token) formData.append('token', token);
+    else if (password) formData.append('password', password);
+    const result = await apiPostForm(`/share/${dashboardData.user?.username}/${encodeURIComponent(filename)}`, formData);
+    return `${window.location.origin}/share/${result.token}`;
+  };
+
+  /** Show a QR code for a share link (never a session-token download URL). */
+  const handleFileQrCode = async (filename: string) => {
+    try {
+      setQrUrl(await createShareUrl(filename));
+    } catch (err: unknown) {
+      alert((err as Error).message || '無法建立分享連結');
+    }
+  };
+
   const handleShare = async (filename: string) => {
     try {
-      const formData = new FormData();
-      if (token) formData.append('token', token);
-      else if (password) formData.append('password', password);
-
       const supportsClipboardItem = typeof ClipboardItem !== 'undefined' &&
         navigator.clipboard &&
         typeof navigator.clipboard.write === 'function';
@@ -570,8 +584,7 @@ export const UserPage: React.FC<UserPageProps> = ({
 
       if (supportsClipboardItem) {
         const textPromise = (async () => {
-          const result = await apiPostForm(`/share/${dashboardData.user?.username}/${encodeURIComponent(filename)}`, formData);
-          shareUrlResult = `${window.location.origin}/share/${result.token}`;
+          shareUrlResult = await createShareUrl(filename);
           return new Blob([shareUrlResult], { type: 'text/plain' });
         })();
 
@@ -585,13 +598,11 @@ export const UserPage: React.FC<UserPageProps> = ({
             if (shareUrlResult) {
                 copySuccess = false;
             } else {
-                const result = await apiPostForm(`/share/${dashboardData.user?.username}/${encodeURIComponent(filename)}`, formData);
-                shareUrlResult = `${window.location.origin}/share/${result.token}`;
+                shareUrlResult = await createShareUrl(filename);
             }
         }
       } else {
-        const result = await apiPostForm(`/share/${dashboardData.user?.username}/${encodeURIComponent(filename)}`, formData);
-        shareUrlResult = `${window.location.origin}/share/${result.token}`;
+        shareUrlResult = await createShareUrl(filename);
 
         if (navigator.clipboard && navigator.clipboard.writeText) {
           try {
@@ -784,10 +795,7 @@ export const UserPage: React.FC<UserPageProps> = ({
                 onRename={handleRename}
                 onDelete={handleDelete}
                 onShare={handleShare}
-                onQrCode={(filename) => {
-                  const url = `${window.location.origin}/${dashboardData.user?.username}/file/${encodeURIComponent(filename)}`;
-                  setQrUrl(url);
-                }}
+                onQrCode={handleFileQrCode}
                 onPreview={(file) => setPreviewFile(file)}
                 username={dashboardData.user?.username || ""}
                 token={token}
@@ -819,7 +827,7 @@ export const UserPage: React.FC<UserPageProps> = ({
                     alert('資料夾內無檔案可下載');
                     return;
                   }
-                  const downloadUrl = `/api/user/${dashboardData.user?.username}/folders/${folderId}/download?token=${token || ''}`;
+                  const downloadUrl = `${API_ORIGIN}/api/user/${dashboardData.user?.username}/folders/${folderId}/download?token=${token || ''}`;
                   window.open(downloadUrl, '_blank');
                 }}
                 onToggleFolderLock={(type, id, status) => toggleItemLock(type, id, !!status)}

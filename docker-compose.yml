@@ -1,0 +1,28 @@
+# Backend-only stack. Frontend: deploy ./frontend to Cloudflare Pages.
+# Usage:  cp ".env example" .env  &&  docker compose up -d --build
+# Add the Cloudflare Tunnel with:  docker compose --profile tunnel up -d
+services:
+  backend:
+    build: .
+    container_name: filenexus-backend
+    restart: unless-stopped
+    env_file: .env
+    # Run as the host user so ./data stays writable (export PUID/PGID or edit .env).
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      SERVER__DEBUG: "false"
+    ports:
+      - "127.0.0.1:5168:5168"
+    volumes:
+      - ./data:/app/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: filenexus-tunnel
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - backend

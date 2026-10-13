@@ -1,0 +1,80 @@
+apply plugin: 'com.android.application'
+
+// Version comes from the release tag (contract §1): -PappVersion=X.Y.Z
+// gives versionName X.Y.Z and versionCode X*10000 + Y*100 + Z.
+def appVersion = (project.findProperty('appVersion') ?: '0.0.1').toString()
+def versionMatcher = appVersion =~ /^(\d+)\.(\d+)\.(\d+)$/
+if (!versionMatcher.matches()) {
+    throw new GradleException("appVersion must be X.Y.Z, got '${appVersion}'")
+}
+def appVersionCode = versionMatcher[0][1].toInteger() * 10000 + versionMatcher[0][2].toInteger() * 100 + versionMatcher[0][3].toInteger()
+
+// Release signing from environment (CI secrets). Without ANDROID_KEYSTORE_FILE
+// assembleRelease yields an unsigned APK; the CI release job refuses to run then.
+def releaseKeystore = System.getenv('ANDROID_KEYSTORE_FILE')
+
+android {
+    namespace = "cc.spkuan.filenexus"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "cc.spkuan.filenexus"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersion
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (releaseKeystore) {
+            release {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (releaseKeystore) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+// Push is optional: apply Google Services only when google-services.json exists
+// (CI writes it from the GOOGLE_SERVICES_JSON secret). Without it the app still
+// builds and registerPush() rejects with PUSH_NOT_CONFIGURED.
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.lifecycle("google-services.json not found: building without Firebase push")
+}

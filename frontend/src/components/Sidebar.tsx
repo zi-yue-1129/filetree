@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FileUp, ShieldCheck, HelpCircle, Sun, Moon } from 'lucide-react';
+import { FileUp, ShieldCheck, HelpCircle, Sun, Moon, Smartphone, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { isMobileNative } from '../native';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface SidebarProps {
@@ -20,6 +21,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'upload', label: '資料上傳中心', icon: FileUp, path: '/' },
   { id: 'help', label: '使用說明', icon: HelpCircle, path: '/help' },
+  { id: 'shortcut', label: 'iPhone 捷徑', icon: Smartphone, path: '/shortcut' },
+  // Native-only: device login, backup, upload queue and updates.
+  ...(isMobileNative() ? [{ id: 'settings', label: 'App 設定', icon: Settings, path: '/settings' }] : []),
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
@@ -28,6 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const { theme, toggleTheme } = useTheme();
   const [isDesktop, setIsDesktop] = useState(false);
   const [isLocalhost] = useState(() => {
+    // The Capacitor WebView is served from https://localhost; that is not a LAN admin context.
+    if (isMobileNative()) return false;
     const hostname = window.location.hostname;
     return hostname === 'localhost' || 
            hostname === '127.0.0.1' || 

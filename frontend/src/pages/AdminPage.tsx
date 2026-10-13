@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, Terminal, Activity, UserPlus, ChevronLeft, ShieldCheck, KeyRound, Save, X, Edit3, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { NotFoundPage } from './NotFoundPage';
+import { apiUrl, wsUrl as buildWsUrl } from '../services/api';
 
 export const AdminPage: React.FC = () => {
   const [masterKey, setMasterKey] = useState('');
@@ -48,7 +49,7 @@ export const AdminPage: React.FC = () => {
 
   const fetchUsers = React.useCallback(async () => {
     try {
-      const res = await fetch(`/api/admin/users?master_key=${masterKey}`);
+      const res = await fetch(apiUrl(`/api/admin/users?master_key=${masterKey}`));
       if (res.ok) {
         const data = await res.json();
         setUsers(data);
@@ -60,7 +61,7 @@ export const AdminPage: React.FC = () => {
 
   const fetchLogs = React.useCallback(async () => {
     try {
-      const res = await fetch(`/api/admin/audit-logs?master_key=${masterKey}`);
+      const res = await fetch(apiUrl(`/api/admin/audit-logs?master_key=${masterKey}`));
       if (res.ok) {
         const data = await res.json();
         setLogs(data);
@@ -81,9 +82,8 @@ export const AdminPage: React.FC = () => {
       }, 5000);
       
       // WebSocket for realtime user list updates
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       // Direct endpoint on app.py to bypass router issues
-      const wsUrl = `${protocol}//${window.location.host}/ws/global`;
+      const wsUrl = buildWsUrl('/ws/global');
       const socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
@@ -110,7 +110,7 @@ export const AdminPage: React.FC = () => {
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`/api/admin/verify?master_key=${masterKey}`);
+      const res = await fetch(apiUrl(`/api/admin/verify?master_key=${masterKey}`));
       if (res.ok) {
         setIsAuthorized(true);
         setStatus({ type: 'success', msg: '矩陣權限已確認。指揮系統上線。' });
@@ -139,7 +139,7 @@ export const AdminPage: React.FC = () => {
       // Password now defaults to username on backend
       if (formData.folder) body.append('folder', formData.folder);
 
-      const res = await fetch('/api/admin/create-user', {
+      const res = await fetch(apiUrl('/api/admin/create-user'), {
         method: 'POST',
         body
       });
@@ -173,7 +173,7 @@ export const AdminPage: React.FC = () => {
       body.append('username', oldName);
       body.append('new_username', editName);
 
-      const res = await fetch('/api/admin/update-user', {
+      const res = await fetch(apiUrl('/api/admin/update-user'), {
         method: 'POST',
         body
       });
@@ -206,7 +206,7 @@ export const AdminPage: React.FC = () => {
         
         body.append('show_in_list', String(editShowInList));
 
-        const res = await fetch('/api/admin/update-user', {
+        const res = await fetch(apiUrl('/api/admin/update-user'), {
             method: 'POST',
             body
         });
@@ -236,7 +236,7 @@ export const AdminPage: React.FC = () => {
       body.append('username', username);
       body.append('new_password', newPwd);
 
-      const res = await fetch('/api/admin/reset-password', {
+      const res = await fetch(apiUrl('/api/admin/reset-password'), {
         method: 'POST',
         body
       });
@@ -265,7 +265,7 @@ export const AdminPage: React.FC = () => {
       body.append('master_key', masterKey);
       body.append('username', username);
 
-      const res = await fetch('/api/admin/reset-default-password', {
+      const res = await fetch(apiUrl('/api/admin/reset-default-password'), {
         method: 'POST',
         body
       });
@@ -293,7 +293,7 @@ export const AdminPage: React.FC = () => {
       body.append('master_key', masterKey);
       body.append('username', username);
 
-      const res = await fetch('/api/admin/delete-user', {
+      const res = await fetch(apiUrl('/api/admin/delete-user'), {
         method: 'POST', // Backend uses POST for this as per my implementation above
         body
       });

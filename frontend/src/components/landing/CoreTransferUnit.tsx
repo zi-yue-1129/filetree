@@ -23,6 +23,12 @@ interface CoreTransferUnitProps {
   setPassword: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   isSyncing: boolean;
+  /**
+   * Native apps only: open the system picker instead of the WebView file
+   * input (native uploads need content URIs, not File objects). When set,
+   * the folder button is hidden.
+   */
+  onNativePickFiles?: () => void;
 }
 
 export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
@@ -35,6 +41,7 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
   setPassword,
   onSubmit,
   isSyncing,
+  onNativePickFiles,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -132,10 +139,10 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
             </div>
 
             {/* File Buttons Grid: Taller on mobile for easier tapping */}
-            <div className="grid grid-cols-2 gap-3 lg:gap-4 h-28 lg:h-[15vh] min-h-25">
+            <div className={cn("grid gap-3 lg:gap-4 h-28 lg:h-[15vh] min-h-25", onNativePickFiles ? "grid-cols-1" : "grid-cols-2")}>
               {/* Select File Button */}
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => (onNativePickFiles ? onNativePickFiles() : fileInputRef.current?.click())}
                 className="group/btn relative flex flex-col items-center justify-center gap-2 lg:gap-[1.5vh] rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 active:bg-cyan-500/10 transition-all overflow-hidden"
               >
                 <div className="p-3 lg:p-[1.5vh] rounded-full bg-white dark:bg-white/10 group-hover/btn:scale-110 transition-transform shadow-sm group-active/btn:scale-95">
@@ -146,7 +153,8 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
                 </span>
               </button>
 
-              {/* Select Folder Button */}
+              {/* Select Folder Button (web only) */}
+              {!onNativePickFiles && (
               <button
                 onClick={() => folderInputRef.current?.click()}
                 className="group/btn relative flex flex-col items-center justify-center gap-2 lg:gap-[1.5vh] rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-purple-500/50 hover:bg-purple-500/5 active:bg-purple-500/10 transition-all overflow-hidden"
@@ -158,6 +166,7 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
                   選擇資料夾
                 </span>
               </button>
+              )}
             </div>
 
             {/* 3. Auth & Submit */}

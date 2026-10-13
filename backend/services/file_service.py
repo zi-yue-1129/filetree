@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set
 
 import aiofiles.os
 import logging
@@ -21,6 +21,18 @@ from backend.config import settings
 from backend.services.database import get_files_db
 
 logger = logging.getLogger(__name__)
+
+
+class FileAccessRecord(NamedTuple):
+    """Placement and effective lock state of an indexed file.
+
+    Attributes:
+        folder_id: The folder holding the file, or None for the user root.
+        is_locked: True if the file itself or any ancestor folder is locked.
+    """
+
+    folder_id: Optional[str]
+    is_locked: bool
 
 
 class FileService:
@@ -460,6 +472,87 @@ class FileService:
         )
         row = await cursor.fetchone()
         return bool(row["is_locked"]) if row else False
+
+    async def get_file_access_records(
+        self,
+        user_folder: str,
+        username: str,
+        filenames: Sequence[str],
+        folders_by_id: Optional[Dict[str, dict]] = None,
+    ) -> Dict[str, FileAccessRecord]:
+        """Bulk-resolve folder placement and effective lock state of files.
+
+        A file is effectively locked when its own ``is_locked`` flag is set or
+        when its folder, or any ancestor of that folder, is locked. This is
+        the same rule the folder-zip download enforces, and every endpoint
+        that gates file content on locks must use it.
+
+        The number of SQL queries is independent of ``len(filenames)``: one
+        files.db query per 500 names (SQLite variable limit) plus at most one
+        users.db query for the folder tree.
+
+        Args:
+            user_folder: The user's storage folder (``files.username`` value).
+            username: The account username (owner of the folders).
+            filenames: Files to resolve. Duplicates are allowed.
+            folders_by_id: Optional preloaded folder dicts keyed by ID (from
+                ``user_service.get_folders_by_username``); loaded if omitted.
+
+        Returns:
+            Mapping of filename to its access record. Files that are not
+            indexed in files.db are absent from the mapping.
+        """
+        from backend.services.user_service import user_service
+
+        db = await get_files_db()
+        rows_by_name: Dict[str, Any] = {}
+        unique_filenames = list(dict.fromkeys(filenames))
+        for start in range(0, len(unique_filenames), 500):
+            chunk = unique_filenames[start:start + 500]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor = await db.execute(
+                "SELECT filename, folder_id, is_locked FROM files "
+                f"WHERE username = ? AND filename IN ({placeholders})",
+                (user_folder, *chunk),
+            )
+            for row in await cursor.fetchall():
+                rows_by_name[row["filename"]] = row
+
+        if folders_by_id is None:
+            folders_by_id = {
+                folder["id"]: folder
+                for folder in await user_service.get_folders_by_username(username)
+            }
+
+        return {
+            filename: FileAccessRecord(
+                folder_id=row["folder_id"],
+                is_locked=bool(row["is_locked"])
+                or user_service.is_folder_chain_locked(folders_by_id, row["folder_id"]),
+            )
+            for filename, row in rows_by_name.items()
+        }
+
+    async def is_file_effectively_locked(
+        self, user_folder: str, username: str, filename: str
+    ) -> bool:
+        """Check whether a file is locked directly or through a locked folder.
+
+        Single-file convenience wrapper around ``get_file_access_records``.
+
+        Args:
+            user_folder: The user's storage folder (``files.username`` value).
+            username: The account username (owner of the folders).
+            filename: The file to check.
+
+        Returns:
+            True if the file or any folder on its ancestor chain is locked.
+            Files not indexed in files.db are reported as unlocked, matching
+            ``is_file_locked``.
+        """
+        records = await self.get_file_access_records(user_folder, username, [filename])
+        record = records.get(filename)
+        return record.is_locked if record else False
 
     # ------------------------------------------------------------------
     # Physical folder operations

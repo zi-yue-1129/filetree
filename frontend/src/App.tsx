@@ -5,16 +5,20 @@ const LandingPage = React.lazy(() => import('./pages/LandingPage').then(module =
 const UserPage = React.lazy(() => import('./pages/UserPage').then(module => ({ default: module.UserPage })));
 const AdminPage = React.lazy(() => import('./pages/AdminPage').then(module => ({ default: module.AdminPage })));
 const HelpPage = React.lazy(() => import('./pages/HelpPage').then(module => ({ default: module.HelpPage })));
+const ShortcutPage = React.lazy(() => import('./pages/ShortcutPage').then(module => ({ default: module.ShortcutPage })));
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage })));
 const SharePage = React.lazy(() => import('./pages/SharePage').then(module => ({ default: module.SharePage })));
+const SettingsPage = React.lazy(() => import('./native/settings/SettingsPage').then(module => ({ default: module.SettingsPage })));
 import { Starfield } from './components/Starfield';
 import { AuraField } from './components/AuraField';
 import { Sidebar } from './components/Sidebar';
 import { PublicDirectory } from './components/PublicDirectory';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { apiRequest } from './services/api';
+import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
+import { NativeBootstrap } from './native/NativeBootstrap';
+import { isMobileNative } from './native';
 
 interface UserData {
   users?: Array<{ username: string; folder: string }>;
@@ -93,6 +97,16 @@ const MainContent: React.FC<{
     return <HelpPage onOpenDirectory={onOpenDirectory} />;
   }
 
+  // iPhone Shortcut setup page
+  if (location.pathname === '/shortcut') {
+    return <ShortcutPage />;
+  }
+
+  // Native app settings (Android/iOS only)
+  if (location.pathname === '/settings') {
+    return <SettingsPage />;
+  }
+
   // User page - check if user exists
   if (username) {
     // If user not found, show 404
@@ -125,7 +139,7 @@ const MainLayout: React.FC<{
   const location = useLocation();
 
   // Determine if we constitute a "dashboard" view (UserPage) that needs independent scrolling panes
-  const isDashboard = location.pathname !== '/' && location.pathname !== '/help';
+  const isDashboard = !['/', '/help', '/shortcut', '/settings'].includes(location.pathname);
 
   // Close mobile drawers on window resize to desktop
   useEffect(() => {
@@ -226,9 +240,8 @@ const AppContent: React.FC = () => {
     fetchInit();
 
     // WebSocket for realtime user list updates
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Direct endpoint on app.py to bypass router issues
-    const wsUrl = `${protocol}//${window.location.host}/ws/global`;
+    const wsUrl = buildWsUrl('/ws/global');
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -252,6 +265,7 @@ const AppContent: React.FC = () => {
 
   return (
     <BrowserRouter>
+      {isMobileNative() && <NativeBootstrap />}
       <div className="min-h-screen relative text-gray-900 dark:text-white/90 selection:bg-quantum-cyan/30">
         {/* Background Layer - Dynamic based on theme */}
         {theme === 'dark' ? <Starfield /> : <AuraField />}
@@ -282,6 +296,16 @@ const AppContent: React.FC = () => {
             <Route path="/help" element={
               <MainLayout users={users} config={config} loading={loading} />
             } />
+
+            <Route path="/shortcut" element={
+              <MainLayout users={users} config={config} loading={loading} />
+            } />
+
+            {isMobileNative() && (
+              <Route path="/settings" element={
+                <MainLayout users={users} config={config} loading={loading} />
+              } />
+            )}
 
             <Route path="/share/:token" element={<SharePage />} />
 

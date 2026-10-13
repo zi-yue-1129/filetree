@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { apiRequest } from '../services/api';
+import { apiRequest, wsUrl as buildWsUrl } from '../services/api';
 import type { UserDashboardData } from '../types/dashboard';
 
 export function useUserDashboard(initialData: UserDashboardData) {
@@ -69,8 +69,7 @@ export function useUserDashboard(initialData: UserDashboardData) {
   // WebSocket
   const wsUrl = useMemo(() => {
     if (!initialData.user?.username) return null;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let url = `${protocol}//${window.location.host}/api/ws/${initialData.user.username}`;
+    let url = buildWsUrl(`/api/ws/${initialData.user.username}`);
     if (token) url += `?token=${token}`;
     return url;
   }, [initialData.user?.username, token]);

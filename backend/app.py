@@ -14,16 +14,20 @@ from backend.routes.api import router as api_router
 from backend.routes.tus import router as tus_router
 from backend.routes.tus import cleanup_expired_uploads
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 from starlette.concurrency import run_in_threadpool
 import logging
 
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialize storage and push delivery, then close them on shutdown."""
     # Startup: Initialize databases
     from backend.services.database import init_db, close_all
     from backend.services.file_service import file_service
+    from backend.services.push_service import push_service
+    push_service.startup()
     logger.info("Startup: Initializing databases...")
     await init_db()
 
@@ -40,7 +44,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"Startup cleanup failed: {e}")
 
     # Start periodic background task
-    async def periodic_cleanup():
+    async def periodic_cleanup() -> None:
         while True:
             await asyncio.sleep(36000)  # Run every 10 hour
             try:
@@ -61,6 +65,8 @@ async def lifespan(app: FastAPI):
         await cleanup_task
     except asyncio.CancelledError:
         pass
+
+    await push_service.shutdown()
 
     # Shutdown: Close database connections
     await close_all()
@@ -190,10 +196,13 @@ async def serve_spa(request: Request, path: str):
         # We'll implement a proper download route later if needed
         pass
 
-    # Try to see if the file exists in static_dir
-    file_path = static_path / path
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
+    # Serve a real file only if it resolves inside static_dir; this blocks
+    # traversal via encoded "../" segments or absolute paths (e.g. "%2Fetc").
+    if "\x00" not in path:
+        static_root = static_path.resolve()
+        file_path = (static_root / path.lstrip("/")).resolve()
+        if file_path.is_relative_to(static_root) and file_path.is_file():
+            return FileResponse(file_path)
     
     # Otherwise, return index.html for SPA routing
     # IMPORTANT: no-cache for index.html to prevent stale JS bundle references

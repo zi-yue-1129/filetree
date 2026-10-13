@@ -68,7 +68,7 @@ interface FileViewProps {
   onToggleLock: (type: 'file' | 'url', id: string, currentStatus: boolean) => void;
   onPreview: (file: { name: string; size: string; url: string }) => void;
   onShare: (filename: string) => void;
-  onQrCode: (url: string) => void;
+  onQrCode: (filename: string) => void;
   onDelete: (filename: string) => void;
   onRename?: (oldName: string, newName: string) => Promise<boolean>;
   folders: Folder[];
