@@ -18,8 +18,10 @@ docker compose up -d --build                    # 只啟動後端 (127.0.0.1:516
 docker compose --profile tunnel up -d           # 同時啟動 cloudflared
 ```
 
-- `SERVER__CORS_ORIGINS` 必須是 JSON 陣列,填入 Pages 網域(及自訂網域),例如
-  `'["https://filenexus.pages.dev","https://files.example.com"]'`。
+- `SERVER__CORS_ORIGINS` 必須是 JSON 陣列,填入 Pages 網域(及自訂網域),**並保留
+  App 的來源** `https://localhost`(Android)、`capacitor://localhost`(iOS)、
+  `tauri://localhost`(macOS/Linux 桌面)、`http://tauri.localhost`(Windows 桌面),
+  否則所有 App 都會被 CORS 擋下。範例見 `.env example`。
 - 資料(資料庫、上傳檔案、TUS 暫存)全部在 `./data`,請定期備份。
 - Image 以 `--proxy-headers` 啟動,TUS 的 `Location` 會正確使用 `https://api.example.com`。
 

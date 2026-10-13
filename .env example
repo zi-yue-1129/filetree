@@ -4,8 +4,10 @@ SECURITY__MASTER_KEY="SECURITY__MASTER_KEY"
 SECURITY__SECRET_KEY="SECURITY__SECRET_KEY"
 
 # SERVER
-# JSON list of allowed frontend origins (your Cloudflare Pages domain).
-SERVER__CORS_ORIGINS='["https://filenexus.pages.dev"]'
+# JSON list of allowed frontend origins: your Cloudflare Pages domain(s) PLUS
+# the native app WebView origins (Android, iOS, macOS/Linux desktop, Windows
+# desktop). Removing the app origins breaks every native app.
+SERVER__CORS_ORIGINS='["https://filenexus.pages.dev","https://localhost","capacitor://localhost","tauri://localhost","http://tauri.localhost"]'
 
 # CLOUDFLARE TUNNEL (only for `docker compose --profile tunnel up -d`)
 # In the tunnel's public hostname, point the service to http://backend:5168
