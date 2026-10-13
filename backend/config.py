@@ -44,7 +44,7 @@ class PathConfig(BaseModel):
     @model_validator(mode='after')
     def resolve_relative_paths(self) -> "PathConfig":
         """Ensure all paths are absolute, resolving relative ones against PROJECT_ROOT."""
-        for field_name in self.model_fields:
+        for field_name in type(self).model_fields:
             value = getattr(self, field_name)
             if isinstance(value, Path) and not value.is_absolute():
                 setattr(self, field_name, PROJECT_ROOT / value)
@@ -64,6 +64,7 @@ class LogicConfig(BaseModel):
     max_url_records: int = 30
     max_content_length: Optional[int] = None
     allowed_extensions: Optional[list[str]] = None
+    thumbnail_workers: int = Field(default=2, ge=1, le=16)
 
 
 
@@ -84,6 +85,7 @@ class PushConfig(BaseModel):
     """Optional Android FCM service-account configuration."""
 
     fcm_service_account_file: Optional[Path] = None
+    debounce_seconds: float = Field(default=30.0, gt=0)
 
 
 class Config(BaseSettings):

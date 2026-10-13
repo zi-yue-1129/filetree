@@ -348,7 +348,8 @@ class UserService:
         return [{**dict(r), "is_locked": bool(r["is_locked"])} for r in rows]
 
     async def get_visible_folders_and_hidden_ids(
-        self, user_id: str, is_authenticated: bool
+        self, user_id: str, is_authenticated: bool,
+        folders: Optional[List[dict]] = None,
     ) -> Tuple[List[dict], Set[str]]:
         """Get visible folders and a set of hidden/locked folder IDs.
 
@@ -357,11 +358,12 @@ class UserService:
         Args:
             user_id: The user ID.
             is_authenticated: Whether the requester is authenticated.
+            folders: Optional already-loaded folder tree, reused without a query.
 
         Returns:
             Tuple of (visible_folders_list, hidden_folder_ids_set).
         """
-        all_folders = await self._get_user_folders(user_id)
+        all_folders = folders if folders is not None else await self._get_user_folders(user_id)
         
         if is_authenticated:
             return all_folders, set()
@@ -374,7 +376,8 @@ class UserService:
 
         hidden_ids = set()
         
-        def mark_hidden(fid: str):
+        def mark_hidden(fid: str) -> None:
+            """Mark one locked subtree without revisiting its folders."""
             if fid in hidden_ids:
                 return
             hidden_ids.add(fid)

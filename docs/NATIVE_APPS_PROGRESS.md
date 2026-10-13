@@ -3,6 +3,49 @@
 Newest entries first. Each entry: date, workstream, branch, what is done,
 what is next, how to verify. See `docs/NATIVE_APPS.md` for the contract.
 
+## 2026-10-13 — Backend performance (Codex), branch `perf/backend` — complete / draft PR
+
+- Draft PR: https://github.com/zi-yue-1129/filetree/pull/27 (base `feat/native-apps`).
+- Measured implementation: `ca43204`; later commits contain benchmark evidence,
+  API documentation and this handoff. No `frontend/**` edits or worker-count change.
+- Done: isolated `backend/perf/` seed and real uvicorn async load harness, three
+  runs at C1/C20, raw/median JSON + Markdown, startup indexed/rebuild cases,
+  RSS/CPU, query plans and separate cProfile reports. Seed: five users, heavy
+  owner with 5,000 files, 200 nested folders and 2,000 URL/notes, valid images,
+  locks, 50 MiB download and forty-chunk 200 MiB uploads.
+- Done: two bounded archive workers, media ZIP_STORED / other deflate level 1,
+  streamed serialized TUS chunks with rollback, locked persistent worker SQLite
+  metadata connection, explicit aware UTC strings with legacy loading/cleanup,
+  batched reconciliation, composite indexes, 1 MiB SHA-256 reads, orjson + JSON
+  gzip, reused folder trees and constant-query media path resolution. Reconcile
+  permission errors now fail explicitly instead of deleting valid index rows.
+- Done: coalesced thumbnails with two decoder slots, atomic disk cache, authorized
+  private ETag/304 and optional matching `version=` long caching; cross-origin
+  validators/range headers. PUSH__DEBOUNCE_SECONDS is configurable (default 30 s);
+  tests use configuration for 0.02 s without weakening delivery assertions.
+- Three-run C20 medians: batch zip p50 3,591.56 → 318.05 ms; folder zip
+  5,539.21 → 643.59 ms; dashboard 717.91 → 526.98 ms, wire bytes
+  1,823,426 → 54,784; TUS 8,277.48 → 3,987.31 ms, throughput
+  370.87 → 985.87 MiB/s, CPU 17.69 → 8.53 s, peak RSS
+  328.62 → 180.41 MiB. Missing-index startup/readiness 515.71 → 330.61 ms.
+  Cold thumbnails trade p50 32.83 → 47.17 ms for lower peak RSS
+  129.00 → 108.78 MiB; p95 is 52.80 → 51.62 ms. Warm previews improve.
+- Evidence and caveats: [report](../backend/perf/REPORT.md),
+  [reproduction](../backend/perf/README.md), [API contract](NATIVE_APPS.md#31-backend-performance-and-cache-behavior).
+  Loopback/shared-host figures are not low-end-device/WAN acceptance. TUS timing
+  ends at indexed import; background hashing can continue. The original push
+  tests already used short timers, so no suite sleep-time reduction is claimed.
+- Red summaries and targeted greens are retained verbatim in the report. Final
+  full suite: `114 passed, 1 warning in 61.38s (0:01:01)`; all original 90 pass.
+  Remaining warning is upstream Starlette TestClient/httpx deprecation. New
+  Python modules pass targeted Ruff checks; annotations/docstrings, file sizes,
+  unchanged baseline observations and `git diff --check` were verified.
+- Follow-ups: real-device/network and video acceptance; client pagination/parsing;
+  cache eviction policy; shared state before multi-worker; separate streaming-zip
+  design; production-disk evidence before SQLite durability/memory tuning.
+- Verify: `timeout 400 /home/ubuntu/.claude/jobs/a7fd3792/tmp/venv/bin/python -m pytest backend/tests -q`
+  and the benchmark command in `backend/perf/README.md`. Run one backend worker.
+
 ## 2026-10-13 — iOS (Codex), branch `feat/native-ios` — completed implementation / final verification
 
 Done

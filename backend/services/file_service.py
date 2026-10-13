@@ -38,7 +38,7 @@ class FileAccessRecord(NamedTuple):
 class FileService:
     """Service for file-related operations backed by files.db."""
 
-    def __init__(self, upload_base: Path = settings.paths.upload_folder):
+    def __init__(self, upload_base: Path = settings.paths.upload_folder) -> None:
         """Initialize the service.
 
         Args:
@@ -112,6 +112,8 @@ class FileService:
         rows = await cursor.fetchall()
 
         files = []
+        current_time = datetime.now()
+        retention_interval = timedelta(days=retention_days)
         for row in rows:
             r = dict(row)
             # Skip if file is in an excluded folder
@@ -131,8 +133,8 @@ class FileService:
                 remaining_minutes = 0
                 expired = False
             else:
-                expiry_time = created_time + timedelta(days=retention_days)
-                remaining = expiry_time - datetime.now()
+                expiry_time = created_time + retention_interval
+                remaining = expiry_time - current_time
                 remaining_days = max(0, remaining.days)
                 remaining_hours = max(0, remaining.seconds // 3600)
                 remaining_minutes = max(0, (remaining.seconds % 3600) // 60)
@@ -666,27 +668,24 @@ class FileService:
 
             disk_filenames = {f["filename"] for f in disk_files}
 
-            # INSERT missing (on disk but not in DB)
+            # Index by name once; repeated linear searches made a rebuild quadratic.
+            disk_by_name = {info["filename"]: info for info in disk_files}
             to_insert = disk_filenames - db_filenames
-            for filename in to_insert:
-                info = next(f for f in disk_files if f["filename"] == filename)
-                await db.execute(
+            if to_insert:
+                await db.executemany(
                     "INSERT INTO files (username, filename, folder_id, "
-                    "size_bytes, created_at, is_locked) "
-                    "VALUES (?, ?, NULL, ?, ?, 0)",
-                    (username, filename, info["size_bytes"],
-                     info["created_at"]),
+                    "size_bytes, created_at, is_locked) VALUES (?, ?, NULL, ?, ?, 0)",
+                    [(username, filename, disk_by_name[filename]["size_bytes"],
+                      disk_by_name[filename]["created_at"]) for filename in to_insert],
                 )
-                stats["inserted"] += 1
-
-            # DELETE stale (in DB but not on disk)
+                stats["inserted"] += len(to_insert)
             to_delete = db_filenames - disk_filenames
-            for filename in to_delete:
-                await db.execute(
+            if to_delete:
+                await db.executemany(
                     "DELETE FROM files WHERE username = ? AND filename = ?",
-                    (username, filename),
+                    [(username, filename) for filename in to_delete],
                 )
-                stats["deleted"] += 1
+                stats["deleted"] += len(to_delete)
 
         await db.commit()
         logger.info(
@@ -718,7 +717,8 @@ class FileService:
                             stat.st_mtime
                         ).isoformat(),
                     })
-                except OSError:
+                except FileNotFoundError:
+                    logger.debug("File disappeared during reconciliation: %s", item)
                     continue
         return files
 

@@ -7,11 +7,12 @@ Uses SQLite for simplicity and reliability.
 
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Iterator
 from contextlib import contextmanager
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 class TusMetadataStore:
     """Stores TUS upload metadata for fingerprint-based resume detection."""
     
-    def __init__(self, db_path: str = "data/tus_metadata.db"):
+    def __init__(self, db_path: str = "data/tus_metadata.db") -> None:
         """Initialize the metadata store.
         
         Args:
@@ -27,6 +28,8 @@ class TusMetadataStore:
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._connection: Optional[sqlite3.Connection] = None
+        self._connection_lock = threading.RLock()
         self._init_db()
     
     def _init_db(self) -> None:
@@ -63,16 +66,28 @@ class TusMetadataStore:
             conn.commit()
     
     @contextmanager
-    def _get_connection(self):
+    def _get_connection(self) -> Iterator[sqlite3.Connection]:
         """Get database connection with context manager."""
-        conn = sqlite3.connect(str(self.db_path), timeout=30.0) # Increase timeout
-        conn.execute("PRAGMA journal_mode=WAL") # Enable WAL mode for concurrency
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-    
+        with self._connection_lock:
+            if self._connection is None:
+                self._connection = sqlite3.connect(
+                    str(self.db_path), timeout=30.0, check_same_thread=False
+                )
+                self._connection.execute("PRAGMA journal_mode=WAL")
+                self._connection.row_factory = sqlite3.Row
+            try:
+                yield self._connection
+            except BaseException:
+                self._connection.rollback()
+                raise
+
+    def close(self) -> None:
+        """Close the serialized worker connection at application shutdown."""
+        with self._connection_lock:
+            if self._connection is not None:
+                self._connection.close()
+                self._connection = None
+
     def create_upload(
         self,
         upload_id: str,
@@ -95,9 +110,12 @@ class TusMetadataStore:
             metadata: Additional metadata dict.
         
         Returns:
-            Created upload record dict, or None on failure.
+            Created upload record dict, or None if concurrently removed.
+
+        Raises:
+            sqlite3.Error: When the session cannot be persisted.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).isoformat(sep=" ")
         
         with self._get_connection() as conn:
             try:
@@ -124,7 +142,7 @@ class TusMetadataStore:
                 conn.commit()
             except Exception as e:
                 logger.error(f"Failed to create upload record: {e}")
-                return None
+                raise
         
         return self.get_upload(upload_id)
     
@@ -183,7 +201,7 @@ class TusMetadataStore:
             """, (
                 offset,
                 json.dumps(parts) if parts is not None else None,
-                datetime.utcnow(),
+                datetime.now(timezone.utc).isoformat(sep=" "),
                 upload_id
             ))
             conn.commit()
@@ -196,7 +214,7 @@ class TusMetadataStore:
                 UPDATE tus_uploads 
                 SET status = 'completed', updated_at = ?
                 WHERE id = ?
-            """, (datetime.utcnow(), upload_id))
+            """, (datetime.now(timezone.utc).isoformat(sep=" "), upload_id))
             conn.commit()
             return cursor.rowcount > 0
     
@@ -207,7 +225,7 @@ class TusMetadataStore:
                 UPDATE tus_uploads 
                 SET status = 'aborted', updated_at = ?
                 WHERE id = ?
-            """, (datetime.utcnow(), upload_id))
+            """, (datetime.now(timezone.utc).isoformat(sep=" "), upload_id))
             conn.commit()
             return cursor.rowcount > 0
     
@@ -223,13 +241,13 @@ class TusMetadataStore:
     
     def cleanup_old_uploads(self, days: int = 7) -> int:
         """Clean up old completed/aborted uploads."""
-        cutoff = datetime.utcnow().timestamp() - (days * 24 * 3600)
+        cutoff = datetime.now(timezone.utc).timestamp() - (days * 24 * 3600)
         
         with self._get_connection() as conn:
             cursor = conn.execute("""
                 DELETE FROM tus_uploads 
                 WHERE status IN ('completed', 'aborted') 
-                AND created_at < datetime(?, 'unixepoch')
+                AND julianday(created_at) < julianday(?, 'unixepoch')
             """, (cutoff,))
             conn.commit()
             return cursor.rowcount
@@ -243,7 +261,7 @@ class TusMetadataStore:
         Returns:
             List of upload IDs that were deleted.
         """
-        cutoff = datetime.utcnow().timestamp() - (days * 24 * 3600)
+        cutoff = datetime.now(timezone.utc).timestamp() - (days * 24 * 3600)
         
         deleted_ids = []
         with self._get_connection() as conn:
@@ -251,7 +269,7 @@ class TusMetadataStore:
             rows = conn.execute("""
                 SELECT id FROM tus_uploads 
                 WHERE status = 'active' 
-                AND updated_at < datetime(?, 'unixepoch')
+                AND julianday(updated_at) < julianday(?, 'unixepoch')
             """, (cutoff,)).fetchall()
             
             expired_ids = [row['id'] for row in rows]

@@ -94,7 +94,7 @@ class PushService:
     def __init__(
         self,
         service_account_file: Optional[Path],
-        debounce_seconds: float = 30.0,
+        debounce_seconds: Optional[float] = None,
         transport: Optional[httpx.AsyncBaseTransport] = None,
         oauth_transport: Optional[httpx.BaseTransport] = None,
     ) -> None:
@@ -107,7 +107,9 @@ class PushService:
             oauth_transport: Optional synchronous OAuth HTTP transport.
         """
         self.service_account_file = service_account_file
-        self.debounce_seconds = debounce_seconds
+        self.debounce_seconds = (
+            settings.push.debounce_seconds if debounce_seconds is None else debounce_seconds
+        )
         self.transport = transport
         self.oauth_transport = oauth_transport
         self.credentials: Optional[service_account.Credentials] = None

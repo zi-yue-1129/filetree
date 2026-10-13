@@ -1,6 +1,7 @@
 """Owner-scoped file, folder, upload, and share API routes."""
 
 import os
+from pathlib import Path
 from typing import Any, List, Optional
 
 from fastapi import (
@@ -12,7 +13,8 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from starlette.concurrency import run_in_threadpool
 from starlette.background import BackgroundTask
 
 from backend.config import settings
@@ -23,6 +25,7 @@ from backend.core.rate_limit import TUS_LIMIT, UPLOAD_LIMIT, limiter
 from backend.core.utils import get_client_ip
 from backend.schemas import BatchActionRequest, FileInfo, ShareInfo
 from backend.services.audit_service import AuditService
+from backend.services.archive_service import create_archive
 from backend.services.device_service import device_service
 from backend.services.event_service import event_service
 from backend.services.file_service import file_service
@@ -37,6 +40,31 @@ router = APIRouter()
 audit_service = AuditService(
     os.path.join(settings.paths.user_info_file.parent, "audit_logs.json")
 )
+
+
+async def _resolve_content_path(
+    user: dict[str, Any], username: str, filename: str
+) -> tuple[Path, bool]:
+    """Resolve placement and effective locks with one query at any folder depth.
+
+    Args:
+        user: Account with its already-loaded folder tree.
+        username: Account username, distinct from its physical storage name.
+        filename: Requested file name.
+
+    Returns:
+        Physical path and effective user/file/folder lock state.
+    """
+    folders_by_id = {folder["id"]: folder for folder in user["folders"]}
+    records = await file_service.get_file_access_records(
+        user["folder"], username, [filename], folders_by_id
+    )
+    record = records.get(filename)
+    folder_id = record.folder_id if record else None
+    path_names = user_service.folder_path_names_from_map(folders_by_id, folder_id)
+    file_path = file_service.upload_base / user["folder"] / Path(*path_names) / filename
+    is_locked = user["is_locked"] or (record.is_locked if record else False)
+    return file_path, is_locked
 
 
 @router.get("/files/{username}", response_model=List[FileInfo])
@@ -511,9 +539,7 @@ async def download_direct(
         raise HTTPException(status_code=404, detail="使用者不存在")
 
     # Check locks
-    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
-        user["folder"], username, filename
-    )
+    file_path, is_locked = await _resolve_content_path(user, username, filename)
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="此資源已被鎖定，請先解鎖")
@@ -522,19 +548,6 @@ async def download_direct(
             raise HTTPException(status_code=403, detail="無效或過期的存取權杖")
 
     # Resolve physical path
-    from backend.services.database import get_files_db
-
-    db = await get_files_db()
-    cursor = await db.execute(
-        "SELECT folder_id FROM files WHERE username = ? AND filename = ?",
-        (user["folder"], filename),
-    )
-    row = await cursor.fetchone()
-    folder_id = row["folder_id"] if row else None
-    path_names = await user_service.get_folder_path_names(username, folder_id)
-    folder = file_service._get_folder_path(user["folder"], path_names)
-    file_path = folder / filename
-
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="檔案不存在")
 
@@ -556,6 +569,7 @@ async def get_thumbnail(
     filename: str,
     token: Optional[str] = None,
     authorization: Optional[str] = Header(None),
+    version: Optional[str] = None,
 ) -> Any:
     """Get a thumbnail for a file.
 
@@ -565,6 +579,7 @@ async def get_thumbnail(
         filename: Target file name.
         token: Caller credential or scoped file capability, where supported.
         authorization: Optional Bearer authorization header.
+        version: Optional cache identity for an immutable thumbnail URL.
 
     Returns:
         Endpoint response.
@@ -574,9 +589,7 @@ async def get_thumbnail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
-        user["folder"], username, filename
-    )
+    file_path, is_locked = await _resolve_content_path(user, username, filename)
     if is_locked:
         if not token:
             raise HTTPException(status_code=403, detail="Locked resource")
@@ -584,28 +597,28 @@ async def get_thumbnail(
         if not await token_service.resolves_file_access(token, username, filename):
             raise HTTPException(status_code=403, detail="Invalid token")
 
-    from backend.services.database import get_files_db
-
-    db = await get_files_db()
-    cursor = await db.execute(
-        "SELECT folder_id FROM files WHERE username = ? AND filename = ?",
-        (user["folder"], filename),
-    )
-    row = await cursor.fetchone()
-    folder_id = row["folder_id"] if row else None
-    path_names = await user_service.get_folder_path_names(username, folder_id)
-    folder = file_service._get_folder_path(user["folder"], path_names)
-    file_path = folder / filename
-
     thumb_path = await thumbnail_service.get_thumbnail(file_path)
     if thumb_path:
-        return FileResponse(
-            path=thumb_path,
-            headers={
-                "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "default-src 'none'; sandbox",
-            },
-        )
+        thumbnail_path = Path(thumb_path)
+        if thumbnail_path == file_path:
+            identity_path = await run_in_threadpool(thumbnail_service._get_cache_path, file_path)
+        else:
+            identity_path = thumbnail_path
+        identity = identity_path.stem
+        etag = f'"{identity}"'
+        headers = {
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "ETag": etag,
+            "Cache-Control": (
+                "private, max-age=31536000, immutable" if version == identity
+                else "private, no-cache"
+            ),
+        }
+        validators = request.headers.get("if-none-match", "")
+        if any(value.strip().removeprefix("W/") in {etag, "*"} for value in validators.split(",")):
+            return Response(status_code=304, headers=headers)
+        return FileResponse(path=thumb_path, headers=headers)
 
     raise HTTPException(status_code=404, detail="Thumbnail not available")
 
@@ -735,7 +748,7 @@ async def batch_download(
 
     folders_by_id = {
         folder["id"]: folder
-        for folder in await user_service.get_folders_by_username(username)
+        for folder in user["folders"]
     }
 
     # Bulk-load placement and effective lock state (file or ancestor folder)
@@ -752,24 +765,15 @@ async def batch_download(
                 status_code=403, detail="部分檔案已鎖定或目錄已加密，需要驗證"
             )
 
-    import tempfile
-    import zipfile
-
-    temp_zip = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
-    temp_zip_path = temp_zip.name
-    temp_zip.close()
-
-    with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fname in filenames:
-            record = access_by_name.get(fname)
-            fid = record.folder_id if record else None
-            path_names = user_service.folder_path_names_from_map(folders_by_id, fid)
-            folder_path = file_service._get_folder_path(user["folder"], path_names)
-            file_path = folder_path / fname
-
-            if file_path.exists():
-                arcname = os.path.join(*path_names, fname) if path_names else fname
-                zf.write(file_path, arcname=arcname)
+    entries: list[tuple[Path, str]] = []
+    for filename in filenames:
+        record = access_by_name.get(filename)
+        folder_id = record.folder_id if record else None
+        path_names = user_service.folder_path_names_from_map(folders_by_id, folder_id)
+        folder_path = file_service.upload_base / user["folder"] / Path(*path_names)
+        archive_name = os.path.join(*path_names, filename) if path_names else filename
+        entries.append((folder_path / filename, archive_name))
+    temp_zip_path = await create_archive(entries)
 
     return FileResponse(
         path=temp_zip_path,

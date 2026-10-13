@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS folders (
 
 CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id);
 CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);
+CREATE INDEX IF NOT EXISTS idx_folders_user_parent ON folders(user_id, parent_id);
 """
 
 NOTES_DB_SCHEMA = """
@@ -77,6 +78,8 @@ CREATE TABLE IF NOT EXISTS urls (
 );
 
 CREATE INDEX IF NOT EXISTS idx_urls_username ON urls(username);
+CREATE INDEX IF NOT EXISTS idx_urls_username_folder ON urls(username, folder_id);
+CREATE INDEX IF NOT EXISTS idx_urls_username_created ON urls(username, created DESC);
 """
 
 FILES_DB_SCHEMA = """
@@ -92,6 +95,7 @@ CREATE TABLE IF NOT EXISTS files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_files_username ON files(username);
+CREATE INDEX IF NOT EXISTS idx_files_username_folder ON files(username, folder_id);
 CREATE INDEX IF NOT EXISTS idx_files_username_filename ON files(username, filename);
 """
 

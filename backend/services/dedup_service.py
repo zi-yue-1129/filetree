@@ -1,3 +1,4 @@
+"""Hash uploaded files in worker threads and reuse duplicate disk content."""
 
 import os
 import hashlib
@@ -7,12 +8,15 @@ from typing import Optional, Dict
 from backend.config import settings
 
 class DedupService:
-    def __init__(self):
+    """Maintain a content hash index for optional hardlink deduplication."""
+
+    def __init__(self) -> None:
+        """Load the persisted content index without starting background work."""
         self.index_file = settings.paths.tus_temp_folder.parent / "file_index.txt"
         self._hash_map: Dict[str, str] = {} # hash -> file_path (one of the copies)
         self._load_index()
 
-    def _load_index(self):
+    def _load_index(self) -> None:
         """Load hash index from file (simple persistence)."""
         if self.index_file.exists():
             try:
@@ -24,7 +28,7 @@ class DedupService:
             except Exception as e:
                 print(f"Error loading dedup index: {e}")
 
-    def _save_index(self):
+    def _save_index(self) -> None:
         """Save hash index to file."""
         try:
             with open(self.index_file, "w", encoding="utf-8") as f:
@@ -36,8 +40,8 @@ class DedupService:
     def calculate_hash(self, file_path: Path) -> str:
         """Calculate SHA-256 hash of a file."""
         sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
+        with file_path.open("rb") as f:
+            for byte_block in iter(lambda: f.read(1024 * 1024), b""):
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
 
@@ -86,7 +90,7 @@ class DedupService:
             print(f"Deduplication error for {file_path}: {e}")
             return False
 
-    async def scan_existing_files(self, upload_folder: Path = None) -> dict:
+    async def scan_existing_files(self, upload_folder: Optional[Path] = None) -> dict:
         """
         Scan all existing files and deduplicate them.
         Returns stats: {'scanned': int, 'deduplicated': int, 'space_saved_bytes': int}

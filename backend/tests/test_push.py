@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
+from backend.config import settings
 from backend.services.user_service import user_service
 from backend.tests.test_devices import bearer, device_row, metadata, register
 
@@ -119,7 +120,7 @@ def test_push_debounce_exclusion_cleanup(
         """Run actual timer tasks and OAuth refresh in the app event loop."""
         service = PushService(
             service_account_file,
-            debounce_seconds=0.02,
+            debounce_seconds=settings.push.debounce_seconds,
             transport=httpx.MockTransport(transport),
         )
         service.startup()
@@ -220,7 +221,7 @@ def test_upload_schedules_real_push(
         """Configure the production singleton for this HTTP integration test."""
         push_service.service_account_file = service_account_file
         push_service.transport = httpx.MockTransport(transport)
-        push_service.debounce_seconds = 0.02
+        push_service.debounce_seconds = settings.push.debounce_seconds
         push_service.startup()
 
     client.portal.call(configure)
@@ -259,7 +260,7 @@ def test_upload_schedules_real_push(
         client.portal.call(push_service.shutdown)
         push_service.service_account_file = None
         push_service.transport = None
-        push_service.debounce_seconds = 30.0
+        push_service.debounce_seconds = settings.push.debounce_seconds
         client.portal.call(push_service.startup)
 
 
