@@ -55,6 +55,26 @@ curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:5168/api/devices   # 應�
 Tunnels 新增 Public Hostname `<API 網域>` → `HTTP` → `localhost:5168`。
 前端改由 Pages 提供後,再從 tunnel 移除舊的前端網域。
 
+## 7. 開機自動啟動(不需要登入 Windows)
+Docker Desktop 預設要有人登入才會啟動。在 **Windows 伺服器**上用「系統管理員」
+PowerShell 執行一次:
+```powershell
+cd <新資料夾>
+powershell -ExecutionPolicy Bypass -File deploy\windows\install-autostart.ps1
+```
+會要求輸入執行 Docker Desktop 的 Windows 帳號密碼(排程在未登入時執行需要)。
+排程 `FileNexus-Docker` 會在開機 1 分鐘後:啟動 Docker Desktop → 等引擎就緒(最多
+5 分鐘)→ `docker compose up -d`,失敗會重試 3 次。
+
+立即測試(不用重開機):
+```powershell
+Start-ScheduledTask -TaskName FileNexus-Docker
+Get-Content <新資料夾>\logs\autostart.log -Tail 20
+```
+log 最後一行應為 `=== Autostart finished OK ===`。移除:
+`powershell -ExecutionPolicy Bypass -File deploy\windows\uninstall-autostart.ps1`。
+舊版的排程 `FileNexus-Backend` 保持停用(Disabled),兩者不要同時啟用。
+
 ## 回復到舊版
 `docker compose down` → 在舊專案資料夾用 `data.bak-*` 覆蓋 `data` → 啟動舊版 →
 把 tunnel 的網域指回舊後端。
