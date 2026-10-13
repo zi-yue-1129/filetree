@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FileUp, ShieldCheck, HelpCircle, Sun, Moon } from 'lucide-react';
+import { FileUp, ShieldCheck, HelpCircle, Sun, Moon, Smartphone } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -20,6 +20,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'upload', label: '資料上傳中心', icon: FileUp, path: '/' },
   { id: 'help', label: '使用說明', icon: HelpCircle, path: '/help' },
+  { id: 'shortcut', label: 'iPhone 捷徑', icon: Smartphone, path: '/shortcut' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {

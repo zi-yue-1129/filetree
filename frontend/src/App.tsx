@@ -5,6 +5,7 @@ const LandingPage = React.lazy(() => import('./pages/LandingPage').then(module =
 const UserPage = React.lazy(() => import('./pages/UserPage').then(module => ({ default: module.UserPage })));
 const AdminPage = React.lazy(() => import('./pages/AdminPage').then(module => ({ default: module.AdminPage })));
 const HelpPage = React.lazy(() => import('./pages/HelpPage').then(module => ({ default: module.HelpPage })));
+const ShortcutPage = React.lazy(() => import('./pages/ShortcutPage').then(module => ({ default: module.ShortcutPage })));
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage })));
 const SharePage = React.lazy(() => import('./pages/SharePage').then(module => ({ default: module.SharePage })));
 import { Starfield } from './components/Starfield';
@@ -93,6 +94,11 @@ const MainContent: React.FC<{
     return <HelpPage onOpenDirectory={onOpenDirectory} />;
   }
 
+  // iPhone Shortcut setup page
+  if (location.pathname === '/shortcut') {
+    return <ShortcutPage />;
+  }
+
   // User page - check if user exists
   if (username) {
     // If user not found, show 404
@@ -125,7 +131,7 @@ const MainLayout: React.FC<{
   const location = useLocation();
 
   // Determine if we constitute a "dashboard" view (UserPage) that needs independent scrolling panes
-  const isDashboard = location.pathname !== '/' && location.pathname !== '/help';
+  const isDashboard = !['/', '/help', '/shortcut'].includes(location.pathname);
 
   // Close mobile drawers on window resize to desktop
   useEffect(() => {
@@ -279,6 +285,10 @@ const AppContent: React.FC = () => {
             } />
             
             <Route path="/help" element={
+              <MainLayout users={users} config={config} loading={loading} />
+            } />
+
+            <Route path="/shortcut" element={
               <MainLayout users={users} config={config} loading={loading} />
             } />
 

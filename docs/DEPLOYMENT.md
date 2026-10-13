@@ -43,6 +43,13 @@ Pages → Create project → Connect to Git,設定:
 `frontend/public/_redirects` 已提供 SPA 路由 fallback。`VITE_API_BASE_URL` 於建置時寫入,
 變更後需重新部署。本機開發不需設定,Vite proxy 仍轉發到 `localhost:5168`。
 
+### iPhone 捷徑 (`/shortcut`)
+
+頁面會顯示 `VITE_API_BASE_URL` 對應的上傳網址與建立步驟。自己建好一次捷徑後,
+在捷徑 App 中「分享 → 拷貝 iCloud 連結」,把連結設成 Pages 環境變數
+`VITE_IOS_SHORTCUT_URL` 並重新部署,頁面就會出現一鍵「加入捷徑」按鈕。
+(iOS 15 起不能直接匯入未簽署的 `.shortcut` 檔,只能用 iCloud 連結。)
+
 ## 已知限制
 
 - 分享連結 (`/share/<token>`) 現在由 Pages 提供靜態 `index.html`,後端原本注入的
