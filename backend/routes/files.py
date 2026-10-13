@@ -784,12 +784,25 @@ async def batch_download(
         if p_user and p_user["username"] == username:
             auth_success = True
 
+    from backend.services.database import get_files_db
+    db = await get_files_db()
+
+    # Bulk-load file metadata (chunked to stay under SQLite's variable limit)
+    file_meta_by_name: dict = {}
+    unique_filenames = list(dict.fromkeys(filenames))
+    for start in range(0, len(unique_filenames), 500):
+        chunk = unique_filenames[start:start + 500]
+        placeholders = ",".join("?" for _ in chunk)
+        cursor = await db.execute(
+            "SELECT filename, folder_id, is_locked FROM files "
+            f"WHERE username = ? AND filename IN ({placeholders})",
+            (user["folder"], *chunk),
+        )
+        for row in await cursor.fetchall():
+            file_meta_by_name[row["filename"]] = row
+
     # Check if any file is locked — require authentication if so
-    has_locked = False
-    for f in filenames:
-        if await file_service.is_file_locked(user["folder"], f):
-            has_locked = True
-            break
+    has_locked = any(bool(row["is_locked"]) for row in file_meta_by_name.values())
 
     if has_locked or user["is_locked"]:
         if not auth_success:
@@ -802,18 +815,16 @@ async def batch_download(
     temp_zip_path = temp_zip.name
     temp_zip.close()
 
-    from backend.services.database import get_files_db
-    db = await get_files_db()
+    folders_by_id = {
+        folder["id"]: folder
+        for folder in await user_service.get_folders_by_username(username)
+    }
 
     with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for fname in filenames:
-            cursor = await db.execute(
-                "SELECT folder_id FROM files WHERE username = ? AND filename = ?",
-                (user["folder"], fname),
-            )
-            row = await cursor.fetchone()
+            row = file_meta_by_name.get(fname)
             fid = row["folder_id"] if row else None
-            path_names = await user_service.get_folder_path_names(username, fid)
+            path_names = user_service.folder_path_names_from_map(folders_by_id, fid)
             folder_path = file_service._get_folder_path(user["folder"], path_names)
             file_path = folder_path / fname
 

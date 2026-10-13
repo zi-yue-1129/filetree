@@ -1,0 +1,51 @@
+"""Shared pytest fixtures for backend tests.
+
+The backend reads its configuration (and opens SQLite files) at import time,
+so every path is redirected to a throwaway directory *before* any ``backend``
+module is imported.
+"""
+
+import os
+import tempfile
+from pathlib import Path
+from typing import Iterator
+
+import pytest
+from fastapi.testclient import TestClient
+
+_SANDBOX = Path(tempfile.mkdtemp(prefix="filenexus-test-"))
+_DATA = _SANDBOX / "data"
+STATIC_DIR = _SANDBOX / "static"
+STATIC_DIR.mkdir(parents=True)
+(STATIC_DIR / "index.html").write_text("<html><title>SPA</title></html>", encoding="utf-8")
+(STATIC_DIR / "app.js").write_text("console.log('ok');", encoding="utf-8")
+SECRET_FILE = _SANDBOX / "secret.txt"
+SECRET_FILE.write_text("TOP-SECRET", encoding="utf-8")
+
+os.environ.update({
+    "PATHS__UPLOAD_FOLDER": str(_DATA / "uploads"),
+    "PATHS__USER_INFO_FILE": str(_DATA / "user_info.json"),
+    "PATHS__TUS_TEMP_FOLDER": str(_DATA / "tus_temp"),
+    "PATHS__STATIC_DIR": str(STATIC_DIR),
+    "PATHS__USERS_DB": str(_DATA / "users.db"),
+    "PATHS__NOTES_DB": str(_DATA / "notes.db"),
+    "PATHS__FILES_DB": str(_DATA / "files.db"),
+    "RATE_LIMIT__ENABLED": "false",
+})
+# TusMetadataStore resolves "data/tus_metadata.db" against the CWD.
+os.chdir(_SANDBOX)
+
+
+@pytest.fixture(scope="session")
+def client() -> Iterator[TestClient]:
+    """Yield a TestClient with the application lifespan (DB init) running.
+
+    The app is imported lazily so the environment above is applied first.
+
+    Yields:
+        A started ``TestClient`` bound to the FastAPI app.
+    """
+    from backend.app import app
+
+    with TestClient(app) as test_client:
+        yield test_client

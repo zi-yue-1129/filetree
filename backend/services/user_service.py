@@ -632,6 +632,32 @@ class UserService:
 
         return path
 
+    @staticmethod
+    def folder_path_names_from_map(
+        folders_by_id: Dict[str, dict], folder_id: Optional[str]
+    ) -> List[str]:
+        """Resolve a folder's path from preloaded folders, without DB queries.
+
+        Mirrors ``get_folder_path_names`` for callers that resolve many
+        folders at once (see ``get_folders_by_username``).
+
+        Args:
+            folders_by_id: Folder dicts keyed by folder ID.
+            folder_id: The folder ID to resolve.
+
+        Returns:
+            List of folder names from root to target.
+        """
+        path: List[str] = []
+        current_id = folder_id
+        for _ in range(50):  # Max depth safety
+            folder = folders_by_id.get(current_id) if current_id else None
+            if folder is None:
+                break
+            path.insert(0, folder["name"])
+            current_id = folder["parent_id"]
+        return path
+
     async def get_folder_by_id(self, folder_id: str) -> Optional[dict]:
         """Fetch a single folder by ID.
 
