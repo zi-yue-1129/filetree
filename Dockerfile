@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
 
 # Persistent state (databases, uploads, tus temp files) lives under /app/data.
+# Pre-create it owned by the default runtime UID so an empty named volume
+# (used on Windows hosts, see deploy/windows/) inherits writable ownership.
+RUN mkdir -p /app/data && chown 1000:1000 /app/data
 VOLUME ["/app/data"]
 EXPOSE 5168
 

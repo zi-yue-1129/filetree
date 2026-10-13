@@ -1,0 +1,20 @@
+# Windows (Docker Desktop) layout. Copy this file to the repo root as
+# docker-compose.override.yml; `docker compose` merges it automatically.
+#
+# Why: SQLite on a Windows-drive bind mount (NTFS via WSL2) has unreliable
+# locking and is slow, so the databases live in a Docker named volume, while
+# the large user files stay on the Windows disk.
+#
+# Paths come from .env (forward slashes):
+#   FILES_ROOT=F:/FILESTATION   -> contains uploads/, tus_temp/, cache/
+services:
+  backend:
+    volumes:
+      - filenexus-db:/app/data
+      - ${FILES_ROOT:?set FILES_ROOT in .env}/uploads:/app/data/uploads
+      - ${FILES_ROOT}/tus_temp:/app/data/tus_temp
+      - ${FILES_ROOT}/cache:/app/data/cache
+
+volumes:
+  filenexus-db:
+    name: filenexus-db
