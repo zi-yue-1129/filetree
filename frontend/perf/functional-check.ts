@@ -2,7 +2,7 @@
  * Functional smoke test of the flows touched by the perf work (unthrottled):
  * uploader add/remove, notes, effects toggle, dashboard folder navigation,
  * selection, rename and the lazily loaded QR dialog — on a phone viewport and
- * on desktop, in full and low-power mode.
+ * on desktop, in full, low-power and plain mode.
  *
  *   PERF_PYTHON=/path/to/venv/bin/python timeout 600 node perf/functional-check.ts [--dist dir]
  */
@@ -100,8 +100,10 @@ async function checkDashboard(page: Page, baseUrl: string, mobile: boolean, sess
   // Folder navigation (folder cards are the virtual list header).
   // Phones open a folder on tap, desktop on double click.
   const folderCard = page.locator('.folder-card', { hasText: '專案 1' }).first();
+  // Desktop double clicks the top strip: the card centre sits within 1px of
+  // the hover overlay's Download button, so a centre click is a coin flip.
   if (mobile) await folderCard.click();
-  else await folderCard.dblclick();
+  else await folderCard.dblclick({ position: { x: 90, y: 12 } });
   await page.getByRole('button', { name: /專案 1/ }).waitFor();
   await page.getByRole('button', { name: '所有檔案' }).click();
   await page.locator('.file-item').first().waitFor();
@@ -193,7 +195,7 @@ async function listFileNames(baseUrl: string, token: string): Promise<string[]> 
 }
 
 /**
- * Effects toggle cycles auto → low → full → auto and drives data-effects.
+ * Effects toggle cycles auto → low → full → plain → auto and drives data-effects.
  *
  * @param page - Desktop page on the landing route.
  */
@@ -215,7 +217,45 @@ async function checkEffectsToggle(page: Page): Promise<void> {
   check(current.stored === 'full' && current.applied === 'full', `after 2 clicks: ${JSON.stringify(current)}`);
   await toggle.click();
   current = await state();
-  check(current.stored === null, `after 3 clicks: ${JSON.stringify(current)}`);
+  check(current.stored === 'plain' && current.applied === 'plain', `after 3 clicks: ${JSON.stringify(current)}`);
+  check((await toggle.textContent())?.includes('極簡') === true, 'third click should select 極簡');
+  check((await page.locator('canvas').count()) === 0, 'plain mode must unmount the canvas background');
+  await toggle.click();
+  current = await state();
+  check(current.stored === null, `after 4 clicks: ${JSON.stringify(current)}`);
+}
+
+/** Background canvas modules that plain mode must never download. */
+const BACKGROUND_CHUNK_PATTERN = /\/(Starfield|AuraField)[-.][^/]*\.js$/;
+
+/**
+ * Plain mode: no canvas background (module not even requested), no
+ * backdrop-filter, no infinite animations, decorative glows hidden.
+ *
+ * @param page - Page currently showing the landing route in plain mode.
+ * @param requestedUrls - Every URL the page requested so far.
+ */
+async function checkPlainMode(page: Page, requestedUrls: string[]): Promise<void> {
+  const applied = await page.evaluate(() => document.documentElement.dataset.effects);
+  check(applied === 'plain', `plain mode must set data-effects=plain, got ${applied}`);
+  check((await page.locator('canvas').count()) === 0, 'plain mode must not render a canvas background');
+  const backgroundChunks = requestedUrls.filter((url) => BACKGROUND_CHUNK_PATTERN.test(url));
+  check(backgroundChunks.length === 0, `plain mode must not download the background: ${backgroundChunks.join(', ')}`);
+  const styles = await page.evaluate(() => {
+    const glass = document.querySelector('.glass-card-premium');
+    const glow = document.querySelector('.fx-glow');
+    const pulse = document.querySelector('.animate-pulse, .animate-spin-slow');
+    return {
+      backdrop: glass ? getComputedStyle(glass).backdropFilter : null,
+      glow: glow ? getComputedStyle(glow).display : null,
+      animation: pulse ? getComputedStyle(pulse).animationName : null,
+      noise: getComputedStyle(document.body, '::before').backgroundImage,
+    };
+  });
+  check(styles.backdrop === null || styles.backdrop === 'none', `plain: backdrop-filter ${styles.backdrop}`);
+  check(styles.glow === null || styles.glow === 'none', `plain: decorative glow display ${styles.glow}`);
+  check(styles.animation === null || styles.animation === 'none', `plain: infinite animation ${styles.animation}`);
+  check(styles.noise === 'none', `plain: noise texture ${styles.noise}`);
 }
 
 /** Run every check. */
@@ -247,10 +287,13 @@ async function main(): Promise<void> {
     if (!response.ok) throw new Error(`login failed: HTTP ${response.status}`);
     const session = (await response.json()) as { token: string };
     for (const mobile of [true, false]) {
-      for (const effects of ['full', 'low']) {
+      for (const effects of ['full', 'low', 'plain']) {
         const label = `${mobile ? 'phone' : 'desktop'}/${effects}`;
         const page = await openPage(browser, mobile, effects, session);
+        const requestedUrls: string[] = [];
+        page.on('request', (request) => requestedUrls.push(request.url()));
         await checkLanding(page, stack.baseUrl, workDir);
+        if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);
         if (!mobile && effects === 'full') {
           await page.goto(`${stack.baseUrl}/`);

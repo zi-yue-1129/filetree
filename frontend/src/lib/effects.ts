@@ -6,16 +6,20 @@
  * - `low`: static background, no backdrop-filter, no infinite animations and
  *   framer-motion limited to opacity (for cheap phones, old tablets and users
  *   who asked the OS to reduce motion).
+ * - `plain` (極簡): only chosen explicitly. Every feature stays, but effects
+ *   that cost real GPU/CPU time are removed: the canvas background is never
+ *   imported, no backdrop-filter, no infinite animations, framer-motion
+ *   animations complete instantly, no large decorative glows/shadows.
  *
- * The user preference (`auto` | `full` | `low`) is stored in localStorage.
+ * The user preference (`auto` | `full` | `low` | `plain`) is stored in localStorage.
  * `auto` resolves to `low` on low-end heuristics or slow startup frames.
  */
 
 /** User-facing preference. */
-export type EffectsPreference = 'auto' | 'full' | 'low';
+export type EffectsPreference = 'auto' | 'full' | 'low' | 'plain';
 
 /** Effective effect level applied to the document. */
-export type EffectsLevel = 'full' | 'low';
+export type EffectsLevel = 'full' | 'low' | 'plain';
 
 /** Why `auto` resolved to `low` (or null when it did not). */
 export type LowPowerReason = 'reduced-motion' | 'few-cores' | 'low-memory' | 'slow-frames' | null;
@@ -47,7 +51,7 @@ interface NavigatorWithMemory extends Navigator {
 export function readEffectsPreference(): EffectsPreference {
   const stored = localStorage.getItem(EFFECTS_STORAGE_KEY);
   if (stored === null) return 'auto';
-  if (stored === 'auto' || stored === 'full' || stored === 'low') return stored;
+  if (stored === 'auto' || stored === 'full' || stored === 'low' || stored === 'plain') return stored;
   // A corrupted cosmetic preference must not keep the whole app from booting:
   // report it, drop the bad value and fall back to automatic detection.
   console.error(`Invalid ${EFFECTS_STORAGE_KEY} value in localStorage, resetting to auto:`, stored);
