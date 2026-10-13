@@ -85,6 +85,7 @@ final class UploadEngineTests: XCTestCase {
         let engine: UploadEngine = try UploadEngine(directory: directory, identifier: UUID().uuidString,
                                                    background: false, sessionConfiguration: session)
         engine.configurationProvider = { return self.configuration() }
+        engine.notificationSink = { job in XCTAssertTrue(["completed", "failed"].contains(job.state)) }
         return engine
     }
 
@@ -157,6 +158,65 @@ final class UploadEngineTests: XCTestCase {
         XCTAssertEqual(TUSFixture.recorded().first?.httpMethod, "POST")
         XCTAssertTrue(TUSFixture.recorded().allSatisfy { $0.url?.host == "new.example" })
         uploader.stop()
+    }
+
+    /// A permanent auth failure is persisted without retrying or losing its original.
+    @MainActor func testPermanentAuthFailure() async throws -> Void {
+        TUSFixture.reset(total: 3, patchStatus: 401)
+        let directory: URL = try directory()
+        let file: URL = directory.appendingPathComponent("fixture.txt")
+        try Data("abc".utf8).write(to: file)
+        let uploader: UploadEngine = try engine(directory: directory)
+        let failed: XCTestExpectation = expectation(description: "Permanent failure")
+        uploader.onProgress = { job in if job.state == "failed" { failed.fulfill() } }
+        _ = try uploader.enqueue(file: file, name: "fixture.txt", mimeType: "text/plain", folderId: nil, source: "app")
+        await fulfillment(of: [failed], timeout: 10)
+        XCTAssertEqual(uploader.snapshots().first?.state, "failed")
+        XCTAssertEqual(uploader.snapshots().first?.attempts, 1)
+        XCTAssertEqual(TUSFixture.recorded().filter { $0.httpMethod == "PATCH" }.count, 1)
+        if let original = uploader.snapshots().first?.file { XCTAssertTrue(FileManager.default.fileExists(atPath: original.path)) }
+        uploader.stop()
+    }
+
+    /// Failed Photos identities survive clearing their queue record for a later re-export.
+    @MainActor func testFailedPhotoIdentitySurvivesQueueCleanup() async throws -> Void {
+        TUSFixture.reset(total: 3, patchStatus: 401)
+        let directory: URL = try directory()
+        let file: URL = directory.appendingPathComponent("fixture.jpg")
+        try Data("abc".utf8).write(to: file)
+        let uploader: UploadEngine = try engine(directory: directory)
+        let backup: PhotoBackup = try PhotoBackup(engine: uploader, observeLibrary: false)
+        let failed: XCTestExpectation = expectation(description: "Failed photo persisted")
+        uploader.onProgress = { job in
+            backup.uploaded(job)
+            if job.state == "failed" { failed.fulfill() }
+        }
+        _ = try uploader.enqueue(file: file, name: "fixture.jpg", mimeType: "image/jpeg", folderId: "backup-folder",
+            source: "backup", lastModified: 123, backupKey: "fixture-asset/L0/001:0:fixture.jpg", backupResourceCount: 1)
+        await fulfillment(of: [failed], timeout: 10)
+        try uploader.clearFinished()
+        let stateFile: URL = try NativeStorage.directory("backup").appendingPathComponent("state.json")
+        let state: BackupState? = try NativeStorage.read(BackupState.self, from: stateFile)
+        XCTAssertTrue(state?.retryAssets?.contains("fixture-asset/L0/001") == true)
+        XCTAssertTrue(uploader.snapshots().isEmpty)
+        uploader.stop()
+    }
+
+    /// The share UI Cancel action permanently cancels unsubmitted work.
+    @MainActor func testShareCancellationPersistsCancelledJobs() async throws -> Void {
+        TUSFixture.reset(total: 3)
+        let directory: URL = try directory()
+        let file: URL = directory.appendingPathComponent("fixture.txt")
+        try Data("abc".utf8).write(to: file)
+        let uploader: UploadEngine = try engine(directory: directory)
+        _ = try uploader.enqueue(file: file, name: "fixture.txt", mimeType: "text/plain", folderId: nil, source: "share")
+        uploader.stop(cancelPending: true)
+        uploader.resume()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(uploader.snapshots().first?.state, "cancelled")
+        let stored: [NativeUpload]? = try NativeStorage.read([NativeUpload].self, from: directory.appendingPathComponent("uploads.json"))
+        XCTAssertEqual(stored?.first?.state, "cancelled")
+        XCTAssertTrue(TUSFixture.recorded().isEmpty)
     }
 
     /// Dismissal cannot pump another task on an invalidated extension session.

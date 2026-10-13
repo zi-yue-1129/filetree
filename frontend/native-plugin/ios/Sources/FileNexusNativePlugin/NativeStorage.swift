@@ -94,7 +94,7 @@ enum NativeStorage {
     /// Read only this executable's Keychain item.
     static func configuration() throws -> NativeConfiguration {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                   kSecAttrService as String: "FileNexusConfiguration",
+                                   kSecAttrService as String: (Bundle.main.bundleIdentifier ?? "cc.spkuan.filenexus") + ".FileNexusConfiguration",
                                    kSecAttrAccount as String: "device", kSecReturnData as String: true]
         var result: CFTypeRef?
         let status: OSStatus = SecItemCopyMatching(query as CFDictionary, &result)
@@ -108,7 +108,7 @@ enum NativeStorage {
     /// Save app-local credentials and mirror into a protected group file when entitled.
     static func configure(_ configuration: NativeConfiguration, mirror: Bool = true) throws -> Void {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                   kSecAttrService as String: "FileNexusConfiguration", kSecAttrAccount as String: "device"]
+                                   kSecAttrService as String: (Bundle.main.bundleIdentifier ?? "cc.spkuan.filenexus") + ".FileNexusConfiguration", kSecAttrAccount as String: "device"]
         let data: Data = try JSONEncoder().encode(configuration)
         let attributes: [String: Any] = [kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]

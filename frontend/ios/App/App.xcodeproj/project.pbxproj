@@ -5,6 +5,8 @@
 	};
 	objectVersion = 60;
 	objects = {
+        F20000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../../native-plugin/ios/Sources/FileNexusNativePlugin/PhotoBackup.swift; sourceTree = SOURCE_ROOT; };
+        F20000000000000000000015 = {isa = PBXBuildFile; fileRef = F20000000000000000000014; };
 
         F20000000000000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = UploadTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
         F20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadTests/UploadEngineTests.swift; sourceTree = SOURCE_ROOT; };
@@ -12,7 +14,7 @@
         F20000000000000000000004 = {isa = PBXBuildFile; fileRef = F10000000000000000000003; };
         F20000000000000000000005 = {isa = PBXBuildFile; fileRef = F10000000000000000000004; };
         F20000000000000000000006 = {isa = PBXBuildFile; fileRef = F10000000000000000000005; };
-        F20000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F20000000000000000000003, F20000000000000000000004, F20000000000000000000005, F20000000000000000000006, ); runOnlyForDeploymentPostprocessing = 0; };
+        F20000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (F20000000000000000000003, F20000000000000000000004, F20000000000000000000005, F20000000000000000000006, F20000000000000000000015, ); runOnlyForDeploymentPostprocessing = 0; };
         F20000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         F20000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         F20000000000000000000010 = {isa = PBXNativeTarget; buildConfigurationList = F20000000000000000000011; buildPhases = (F20000000000000000000007, F20000000000000000000008, F20000000000000000000009, ); buildRules = (); dependencies = (); name = UploadTests; productName = UploadTests; productReference = F20000000000000000000001; productType = "com.apple.product-type.bundle.unit-test"; };
@@ -89,6 +91,7 @@
 				504EC3061FED79650016851F /* App */,
                 F10000000000000000000015 /* ShareExtension */,
                 F20000000000000000000002 /* UploadTests */,
+                F20000000000000000000014 /* PhotoBackup */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";

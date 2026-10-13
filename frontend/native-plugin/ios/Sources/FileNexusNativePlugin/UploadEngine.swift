@@ -53,6 +53,8 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     private var retryTimer: Timer?
     private let logger: Logger = Logger(subsystem: "cc.spkuan.filenexus", category: "Upload")
     var onProgress: ((NativeUpload) -> Void)?
+    /// Inject notification delivery for a hostless XCTest process without an app bundle.
+    var notificationSink: ((NativeUpload) -> Void)?
     var backgroundCompletion: (() -> Void)?
     var configurationProvider: () throws -> NativeConfiguration = { return try NativeStorage.configuration() }
 
@@ -157,8 +159,14 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
             tasks.filter { $0.taskDescription?.hasPrefix(jobId + "|") == true }.forEach { $0.cancel() }
         }
         onProgress?(jobs[index])
+        try removeFiles(job)
+        defer { pump() }
         if let url = job.uploadURL {
-            let credentials: (URL, String) = try configurationProvider().credentials()
+            let configuration: NativeConfiguration = try configurationProvider()
+            guard try configuration.fingerprint() == job.credentialId else {
+                throw NativeFailure("Upload cancelled locally; original credentials are needed for server termination", code: "NOT_CONFIGURED")
+            }
+            let credentials: (URL, String) = try configuration.credentials()
             var request: URLRequest = request(url, method: "DELETE", token: credentials.1)
             request.timeoutInterval = 30
             let (_, response): (Data, URLResponse) = try await URLSession.shared.data(for: request)
@@ -166,12 +174,17 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
                 throw NativeFailure("Upload cancelled locally; server termination failed")
             }
         }
-        try removeFiles(job)
-        pump()
     }
 
     /// Retry retained failed backup originals during a manual scan.
-    func retryFailedBackup() throws -> Void {
+    func retryFailedBackup(folderId: String) throws -> Void {
+        for index: Int in jobs.indices where jobs[index].source == "backup" && ["queued", "retrying", "failed"].contains(jobs[index].state) {
+            if jobs[index].folderId != folderId {
+                jobs[index].folderId = folderId
+                jobs[index].uploadURL = nil
+                jobs[index].bytesSent = 0
+            }
+        }
         for index: Int in jobs.indices where jobs[index].source == "backup" && jobs[index].state == "failed" {
             jobs[index].state = "queued"
             jobs[index].attempts = 0
@@ -190,12 +203,15 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     /// Stop extension foreground work when its UI is dismissed.
-    func stop() -> Void {
+    func stop(cancelPending: Bool = false) -> Void {
         stopped = true
         retryTimer?.invalidate()
-        for index: Int in jobs.indices where jobs[index].taskIdentifier != nil {
+        for index: Int in jobs.indices where ["queued", "retrying", "uploading"].contains(jobs[index].state) {
             jobs[index].taskIdentifier = nil
-            jobs[index].state = "queued"
+            jobs[index].state = cancelPending ? "cancelled" : "queued"
+            if cancelPending {
+                do { try removeFiles(jobs[index]) } catch { logger.error("Cannot clean cancelled share files: \(error.localizedDescription)") }
+            }
         }
         do { try persist() } catch { logger.error("Cannot persist stopped share queue: \(error.localizedDescription)") }
         session.invalidateAndCancel()
@@ -326,6 +342,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
         let credentials: (URL, String) = try configurationProvider().credentials()
         var request: URLRequest = request(url, method: "PATCH", token: credentials.1)
         request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue(String(data.count), forHTTPHeaderField: "Content-Length")
         request.setValue(String(job.bytesSent), forHTTPHeaderField: "Upload-Offset")
         try submit(index, stage: "patch", request: request, file: chunk)
     }
@@ -356,6 +373,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     }
 
     private func notify(_ job: NativeUpload) -> Void {
+        if let sink = notificationSink { sink(job); return }
         let content: UNMutableNotificationContent = UNMutableNotificationContent()
         content.title = job.state == "completed" ? "上傳完成" : "上傳失敗"
         content.body = job.name
@@ -420,7 +438,11 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
             if TUSProtocol.completed(stage: stage, offset: offset, total: jobs[index].bytesTotal) {
                 jobs[index].state = "completed"
                 try persist()
-                onProgress?(jobs[index]); notify(jobs[index]); try removeFiles(jobs[index]); pump()
+                onProgress?(jobs[index]); notify(jobs[index])
+                do { try removeFiles(jobs[index]) } catch {
+                    logger.error("Upload completed, but local cleanup failed: \(error.localizedDescription, privacy: .public)")
+                }
+                pump()
             } else {
                 try persist()
                 onProgress?(jobs[index])

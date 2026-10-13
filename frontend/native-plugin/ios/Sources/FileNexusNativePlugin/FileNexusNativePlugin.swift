@@ -57,6 +57,9 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
                   url.path.isEmpty || url.path == "/", call.options.keys.contains("deviceToken") else {
                 throw NativeFailure("serverUrl must be an HTTPS origin and deviceToken must be provided", code: "INVALID_ARGUMENT")
             }
+            guard call.options["deviceToken"] is NSNull || call.options["deviceToken"] is String else {
+                throw NativeFailure("deviceToken must be a string or null", code: "INVALID_ARGUMENT")
+            }
             let token: String? = call.getString("deviceToken")
             if let token = token, token.isEmpty { throw NativeFailure("deviceToken cannot be empty", code: "INVALID_ARGUMENT") }
             let configuration: NativeConfiguration = NativeConfiguration(serverUrl: server.trimmingCharacters(in: CharacterSet(charactersIn: "/")),

@@ -235,7 +235,7 @@ final class ShareViewController: UIViewController {
             } catch { showError(error); return }
         }
         worker?.cancel()
-        if group == nil { engine?.stop() }
+        if group == nil { engine?.stop(cancelPending: true) }
         extensionContext?.completeRequest(returningItems: nil)
     }
 }

@@ -35,6 +35,10 @@ LocalDevVPN 和 iLoader**。舊版 SideStore 教學使用 StosVPN，請以您安
 按 **Delete Stored Pairing**，重新信任手機，再按 **Manage Pairing File →
 Place**。參考[官方配對檔說明](https://docs.sidestore.io/docs/advanced/pairing-file)。
 
+若 iOS 26.4 以上出現 AFC／錯誤 27，官方故障文件目前建議使用 SideStore
+Nightly，請先依[官方錯誤說明](https://docs.sidestore.io/docs/troubleshooting/error-codes)
+更新，不要直接刪除 FileNexus。
+
 ## 2. 加入 FileNexus 來源並安裝
 
 1. 保持 Wi-Fi 與 LocalDevVPN 開啟。
@@ -51,7 +55,7 @@ Place**。參考[官方配對檔說明](https://docs.sidestore.io/docs/advanced/
 6. 等安裝完成，在主畫面開啟 FileNexus，進入「設定」確認伺服器網址，
    用 FileNexus 的登入密碼註冊裝置。這個密碼與 Apple ID 密碼是兩回事。
 
-如果来源尚未有正式發行，網址可能回傳找不到檔案；請等待正式 Release。
+如果來源尚未有正式發行，網址可能回傳找不到檔案；請等待正式 Release。
 測試 IPA 在 GitHub Actions 的 build-ios 執行頁下方 Artifacts，需要登入
 GitHub 下載 ZIP、解壓出 `.ipa`，再於 SideStore 的 My Apps「＋」匯入。
 
@@ -69,7 +73,7 @@ App 到期而打不開時，先重新整理 SideStore；若 SideStore 也到期�
 
 免費帳號同時最多 **3 個 App，包含 SideStore 自己**，通常剩 2 個名額。
 另有每 7 天最多 10 個 App ID 的限制；分享延伸功能可能另用 App ID，
-這与 3 個主程式的限制不同。若提示超額，停用其他 App 或等 App ID 到期。
+這與 3 個主程式的限制不同。若提示超額，停用其他 App 或等 App ID 到期。
 不要為省 App ID 而移除 FileNexus 的分享延伸功能。
 
 FileNexus 的網頁介面會透過內建更新機制下載新版本並於下次啟動套用；
@@ -95,7 +99,7 @@ FileNexus 的網頁介面會透過內建更新機制下載新版本並於下次�
 
 ## 5. 相簿備份與通知
 
-1. FileNexus「設定」開啟相簿備份；系統询問時，選「允許完整取用」可
+1. FileNexus「設定」開啟相簿備份；系統詢問時，選「允許完整取用」可
    備份所有可見的新照片。「選擇照片」只備份您允許的項目。
 2. 選擇是否包含影片及「僅 Wi-Fi」。啟用後新增的照片會放入伺服器的
    `相簿備份/<裝置名稱>`；不會立即重傳啟用前的全部相簿。

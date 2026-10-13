@@ -27,6 +27,7 @@ jobs:
       RELEASE_VERSION: ${{ inputs.version }}
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
       VITE_APP_VERSION: ${{ inputs.version || '0.0.1' }}
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.1.0

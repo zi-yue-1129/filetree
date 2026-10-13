@@ -122,9 +122,12 @@ public enum FileNexusLifecycle {
         guard try NativeStorage.appGroup() != nil else { return }
         let directory: URL = try NativeStorage.directory("share-inbox", shared: true)
         for item: [String: Any] in try sharedItems() {
-            guard let id = item["id"] as? String, ids == nil || ids?.contains(id) == true,
-                  let uri = item["uri"] as? String, let file = URL(string: uri),
-                  file.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL else { continue }
+            guard let id = item["id"] as? String else { throw NativeFailure("Share manifest has no identifier") }
+            if let ids = ids, !ids.contains(id) { continue }
+            guard let uri = item["uri"] as? String, let file = URL(string: uri),
+                  file.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL else {
+                throw NativeFailure("Share manifest references a file outside the inbox")
+            }
             if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
             try FileManager.default.removeItem(at: directory.appendingPathComponent(id + ".json"))
         }

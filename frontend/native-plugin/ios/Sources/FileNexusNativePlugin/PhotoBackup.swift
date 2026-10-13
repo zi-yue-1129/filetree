@@ -12,6 +12,7 @@ struct BackupState: Codable {
     var includeVideos: Bool = false
     var folderId: String?
     var deviceId: String?
+    var credentialFingerprint: String?
     var lastRunAt: Double?
     var lastBackedUpAt: Double?
     var lastIdentifier: String = ""
@@ -35,12 +36,12 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
     private let logger: Logger = Logger(subsystem: "cc.spkuan.filenexus", category: "Backup")
 
     /// Restore backup preferences before registering PhotoKit change callbacks.
-    init(engine: UploadEngine) throws {
+    init(engine: UploadEngine, observeLibrary: Bool = true) throws {
         self.engine = engine
         self.stateFile = try NativeStorage.directory("backup").appendingPathComponent("state.json")
         self.state = try NativeStorage.read(BackupState.self, from: self.stateFile) ?? BackupState()
         super.init()
-        if [.authorized, .limited].contains(PHPhotoLibrary.authorizationStatus(for: .readWrite)) {
+        if observeLibrary, [.authorized, .limited].contains(PHPhotoLibrary.authorizationStatus(for: .readWrite)) {
             PHPhotoLibrary.shared().register(self)
         }
     }
@@ -103,7 +104,12 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
             try Task.checkCancellation()
             let configuration: NativeConfiguration = try NativeStorage.configuration()
             let credentials: (URL, String) = try configuration.credentials()
-            if state.deviceId != configuration.deviceId { state.folderId = nil; state.deviceId = configuration.deviceId }
+            let fingerprint: String = try configuration.fingerprint()
+            if state.credentialFingerprint != fingerprint {
+                state.folderId = nil
+                state.deviceId = configuration.deviceId
+                state.credentialFingerprint = fingerprint
+            }
             if state.folderId == nil {
                 var request: URLRequest = URLRequest(url: credentials.0.appendingPathComponent("api/backup/folder"))
                 request.httpMethod = "POST"
@@ -122,7 +128,8 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
                 state.folderId = folder
                 try save()
             }
-            try engine.retryFailedBackup()
+            guard let folderId = state.folderId else { throw NativeFailure("Photo backup destination is unavailable") }
+            try engine.retryFailedBackup(folderId: folderId)
             let options: PHFetchOptions = PHFetchOptions()
             let startDate: Date = Date(timeIntervalSince1970: (state.lastBackedUpAt ?? state.baseline) / 1000)
             options.predicate = NSPredicate(format: "creationDate >= %@", startDate as NSDate)
@@ -143,6 +150,10 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
             var processed: Int = 0
             for asset: PHAsset in assets {
                 try Task.checkCancellation()
+                guard state.enabled else { return }
+                guard try NativeStorage.configuration().fingerprint() == fingerprint else {
+                    throw NativeFailure("Device configuration changed during photo backup", code: "NOT_CONFIGURED")
+                }
                 guard let creation = asset.creationDate else { throw NativeFailure("Photo asset has no creation date") }
                 let timestamp: Double = creation.timeIntervalSince1970 * 1000
                 if !retryIds.contains(asset.localIdentifier), let last = state.lastBackedUpAt, timestamp == last && asset.localIdentifier <= state.lastIdentifier { continue }
@@ -161,7 +172,16 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
                     // backups surface an iCloud-export error rather than using cellular data.
                     exportOptions.isNetworkAccessAllowed = !state.wifiOnly
                     try await export(resource, to: temporary, options: exportOptions)
-                    try Task.checkCancellation()
+                    do {
+                        try Task.checkCancellation()
+                        guard state.enabled else { try FileManager.default.removeItem(at: temporary); return }
+                        guard try NativeStorage.configuration().fingerprint() == fingerprint else {
+                            throw NativeFailure("Device configuration changed during photo export", code: "NOT_CONFIGURED")
+                        }
+                    } catch {
+                        try FileManager.default.removeItem(at: temporary)
+                        throw error
+                    }
                     let mime: String = UTType(resource.uniformTypeIdentifier)?.preferredMIMEType ?? "application/octet-stream"
                     _ = try engine.enqueue(file: temporary, name: resource.originalFilename, mimeType: mime,
                         folderId: state.folderId, source: "backup", lastModified: timestamp, wifiOnly: state.wifiOnly, backupKey: key, backupResourceCount: resources.count)
@@ -217,8 +237,8 @@ final class PhotoBackup: NSObject, PHPhotoLibraryChangeObserver {
             (timestamp == state.lastUploadedAt && identifier > state.lastUploadedIdentifier) {
             state.lastUploadedAt = timestamp
             state.lastUploadedIdentifier = identifier
-            do { try save() } catch { logger.error("Cannot persist uploaded photo checkpoint: \(error.localizedDescription)") }
         }
+        do { try save() } catch { logger.error("Cannot persist uploaded photo checkpoint: \(error.localizedDescription)") }
     }
 
     /// Reschedule best-effort background processing and short refresh windows.
