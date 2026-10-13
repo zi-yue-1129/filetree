@@ -19,6 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, 
 from fastapi.responses import Response
 from starlette.requests import ClientDisconnect
 from starlette.concurrency import run_in_threadpool
+from slowapi.util import get_remote_address
 
 from backend.config import settings
 from backend.core.auth import extract_bearer_token
@@ -200,7 +201,9 @@ async def create_tus_upload(
                     authenticated_token = token
 
         if not user and password:
-            user = await user_service.get_user_by_password(password)
+            user = await user_service.get_user_by_password(
+                password, client_key=get_remote_address(request)
+            )
 
         if not user:
             raise HTTPException(status_code=401, detail="驗證失敗")
