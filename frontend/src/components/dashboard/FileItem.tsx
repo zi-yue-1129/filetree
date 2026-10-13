@@ -123,12 +123,12 @@ interface FileItemProps {
   isAuthenticated: boolean;
   folders: Folder[];
   viewMode: 'grid' | 'list';
-  selectedItems: { type: 'file' | 'url' | 'folder'; id: string }[];
+  /** Current selection, read lazily (drag start) so selection changes do not re-render every row. */
+  getSelectedItems: () => { type: 'file' | 'url' | 'folder'; id: string }[];
   
   onToggleSelect: (type: 'file', id: string) => void;
   onSelectionModeChange: (active: boolean) => void;
   onPreview: (file: { name: string; size: string; url: string }) => void;
-  onBatchSelect: (items: { type: 'file' | 'url' | 'folder'; id: string }[], action: 'add' | 'remove' | 'set') => void;
   
   // Actions
   onShare: (filename: string) => void;
@@ -148,6 +148,28 @@ interface FileItemProps {
   isDesktop?: boolean;
 }
 
+/** File fields that FileItem renders or passes to its handlers. */
+const RENDERED_FILE_FIELDS = ['name', 'size_bytes', 'expired', 'remaining_days', 'is_locked', 'folder_id'] as const;
+
+/**
+ * Memo comparator: every WebSocket REFRESH refetches the dashboard and creates
+ * new file objects (and `remaining_hours`/`remaining_minutes` tick every
+ * minute), so comparing `file` by identity re-rendered every visible row.
+ * Compare the rendered file fields instead; all other props by identity.
+ *
+ * @param previous - Previous props.
+ * @param next - Next props.
+ * @returns Whether the row can skip re-rendering.
+ */
+function areFileItemPropsEqual(previous: FileItemProps, next: FileItemProps): boolean {
+  for (const key of Object.keys(next) as Array<keyof FileItemProps>) {
+    if (key === 'file') continue;
+    if (!Object.is(previous[key], next[key])) return false;
+  }
+  if (Object.keys(previous).length !== Object.keys(next).length) return false;
+  return RENDERED_FILE_FIELDS.every((field) => Object.is(previous.file[field], next.file[field]));
+}
+
 export const FileItem: React.FC<FileItemProps> = React.memo(({
   file,
   username,
@@ -157,7 +179,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
   isAuthenticated,
   folders,
   viewMode,
-  selectedItems,
+  getSelectedItems,
   onToggleSelect,
   onSelectionModeChange,
   onPreview,
@@ -201,6 +223,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
   };
 
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>) => {
+    const selectedItems = getSelectedItems();
     const isFileSelected = selectedItems.some(i => i.type === 'file' && i.id === file.name);
     const itemsToDrag: DragItem[] = isFileSelected 
       ? selectedItems.map(i => ({ type: i.type, id: i.id }))
@@ -377,7 +400,8 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
         <div className="shrink-0 flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity pr-2">
           {!isLocked && (
             <div className="flex items-center gap-1">
-              {/* Desktop Actions */}
+              {/* Desktop Actions (not rendered on phones, where they are hidden) */}
+              {isDesktop && (
               <div className="hidden lg:flex items-center gap-1">
                 {isAuthenticated && (
                   <button
@@ -474,6 +498,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                   </button>
                 )}
               </div>
+              )}
 
               {/* Mobile Actions Menu */}
               <div className="lg:hidden">
@@ -555,7 +580,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
           <DropdownMenu
             trigger={
               <button 
-                className="p-2 sm:p-1.5 rounded-lg backdrop-blur-sm transition-all shadow-sm bg-white/80 dark:bg-black/50 text-gray-500 hover:text-cyan-500 min-w-10 min-h-10 flex items-center justify-center"
+                className="p-2 sm:p-1.5 rounded-lg transition-colors shadow-sm bg-white/85 dark:bg-black/60 text-gray-500 hover:text-cyan-500 min-w-10 min-h-10 flex items-center justify-center"
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
@@ -576,6 +601,9 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
             src={`${API_ORIGIN}/api/thumbnail/${username}/${encodeURIComponent(file.name)}?v=2${token ? `&token=${token}` : ''}`}
             alt={file.name}
             loading="lazy"
+            decoding="async"
+            width={300}
+            height={225}
             className="w-full h-full object-cover"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
@@ -594,7 +622,8 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
           ))}
         </div>
         
-        {/* Desktop Hover Overlay Actions */}
+        {/* Desktop Hover Overlay Actions (not rendered on phones, where it is hidden) */}
+        {isDesktop && (
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity hidden lg:flex flex-wrap items-end content-end justify-center gap-1.5 pt-10 p-3 z-20 pointer-events-none">
           <button
             onClick={(e) => { e.stopPropagation(); onShare(file.name); }}
@@ -697,10 +726,11 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
             </>
           )}
         </div>
+        )}
       </div>
 
       {/* File Info for Grid */}
-      <div className="p-2 sm:p-3 bg-white/50 dark:bg-white/5 flex-1 flex flex-col justify-between backdrop-blur-sm border-t border-white/20 dark:border-white/5">
+      <div className="p-2 sm:p-3 bg-white/50 dark:bg-white/5 flex-1 flex flex-col justify-between border-t border-white/20 dark:border-white/5">
         <div className="mb-2">
           {renamingFile === file.name ? (
             <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
@@ -761,4 +791,4 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
       </div>
     </ItemWrapper>
   );
-});
+}, areFileItemPropsEqual);

@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SecurityInitializationModal } from '../components/SecurityInitializationModal';
 import { X } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '../lib/utils';
 import { apiRequest, apiPostForm, apiUrl, API_ORIGIN } from '../services/api';
 import { FilePreviewModal } from '../components/FilePreviewModal';
@@ -13,16 +12,20 @@ import { FolderSidebar } from '../components/dashboard/FolderSidebar';
 import { BatchActionBar } from '../components/dashboard/BatchActionBar';
 import { useUserDashboard } from '../hooks/useUserDashboard';
 import { useSelection } from '../hooks/useSelection';
+import { useStableCallback } from '../hooks/useStableCallback';
 import { UserPageHeader } from '../components/user-page/UserPageHeader';
 import { UserPageToolbar } from '../components/user-page/UserPageToolbar';
 import { BreadcrumbsBar } from '../components/user-page/BreadcrumbsBar';
 import type { Folder, UserDashboardData } from '../types/dashboard';
 
+// The QR code renderer is only needed once a QR dialog opens.
+const QRCodeSVG = React.lazy(() => import('qrcode.react').then((module) => ({ default: module.QRCodeSVG })));
+
 interface UserPageProps {
   data: UserDashboardData;
 }
 
-export const UserPage: React.FC<UserPageProps> = ({ 
+const UserPageView: React.FC<UserPageProps> = ({
   data: initialData 
 }) => {
   const {
@@ -64,7 +67,9 @@ export const UserPage: React.FC<UserPageProps> = ({
   const [activeUrlFolderId, setActiveUrlFolderId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(true);
+  // Initialise from the media query so phones do not render the desktop
+  // variant of every row first and then re-render.
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
 
   // Responsive check
   useEffect(() => {
@@ -674,6 +679,51 @@ export const UserPage: React.FC<UserPageProps> = ({
     }
   };
 
+  // Stable handlers and derived props so memoized file/folder rows only
+  // re-render when their own data or selection state changes.
+  const fileFolders = useMemo(() => (dashboardData.folders || []).filter(f => f.type === 'file'), [dashboardData.folders]);
+  const urlFolders = useMemo(() => (dashboardData.folders || []).filter(f => f.type === 'url'), [dashboardData.folders]);
+  const fileViewSelection = useMemo(() => selectedItems.filter(i => i.type === 'file' || i.type === 'folder'), [selectedItems]);
+  const urlViewSelection = useMemo(() => selectedItems.filter(i => i.type === 'url' || i.type === 'folder'), [selectedItems]);
+  const onPreviewItem = useCallback((file: { name: string; size: string; url: string }) => setPreviewFile(file), []);
+  const onToggleItemLock = useStableCallback((type: 'file' | 'url' | 'folder', id: string, status?: boolean) => toggleItemLock(type, id, !!status));
+  const onRenameFile = useStableCallback(handleRename);
+  const onDeleteFile = useStableCallback(handleDelete);
+  const onDeleteUrl = useStableCallback(handleUrlDelete);
+  const onShareFile = useStableCallback(handleShare);
+  const onQrCodeFile = useStableCallback(handleFileQrCode);
+  const onMoveItem = useStableCallback(handleMoveItem);
+  const onUpdateFolder = useStableCallback(handleUpdateFolder);
+  const onDeleteFolder = useStableCallback(handleDeleteFolder);
+  const onFileFolderClick = useStableCallback((id: string) => handleFolderNavigation('file', id));
+  const onUrlFolderClick = useStableCallback((id: string) => handleFolderNavigation('url', id));
+  const onShareFolderLink = useStableCallback((tab: 'file' | 'url', folderId: string) => {
+    const url = `${window.location.origin}/${dashboardData.user?.username}?tab=${tab}&folder=${folderId}`;
+    navigator.clipboard?.writeText(url).then(() => alert('資料夾連結已複製！'));
+  });
+  const onShareFileFolder = useCallback((folderId: string) => onShareFolderLink('file', folderId), [onShareFolderLink]);
+  const onShareUrlFolder = useCallback((folderId: string) => onShareFolderLink('url', folderId), [onShareFolderLink]);
+  const onQrCodeFolderLink = useStableCallback((tab: 'file' | 'url', folderId: string) => {
+    setQrUrl(`${window.location.origin}/${dashboardData.user?.username}?tab=${tab}&folder=${folderId}`);
+  });
+  const onQrCodeFileFolder = useCallback((folderId: string) => onQrCodeFolderLink('file', folderId), [onQrCodeFolderLink]);
+  const onQrCodeUrlFolder = useCallback((folderId: string) => onQrCodeFolderLink('url', folderId), [onQrCodeFolderLink]);
+  const onDownloadFolder = useStableCallback((folderId: string) => {
+    const hasFiles = (fId: string): boolean => {
+       const directFiles = dashboardData.files?.some(f => f.folder_id === fId);
+       if (directFiles) return true;
+       const subfolders = dashboardData.folders?.filter(f => f.parent_id === fId) || [];
+       return subfolders.some(sub => hasFiles(sub.id));
+    };
+    if (!hasFiles(folderId)) {
+      alert('資料夾內無檔案可下載');
+      return;
+    }
+    const downloadUrl = `${API_ORIGIN}/api/user/${dashboardData.user?.username}/folders/${folderId}/download?token=${token || ''}`;
+    window.open(downloadUrl, '_blank');
+  });
+  const onCopyUrl = useCallback((url: string) => { navigator.clipboard?.writeText(url).then(() => alert("已複製！")); }, []);
+
   const isAllSelected = activeTab === 'files' 
     ? (filteredFiles.length > 0 && selectedItems.filter(i => i.type === 'file').length === filteredFiles.length)
     : (filteredUrls.length > 0 && selectedItems.filter(i => i.type === 'url').length === filteredUrls.length);
@@ -682,8 +732,6 @@ export const UserPage: React.FC<UserPageProps> = ({
     <div className="h-full flex flex-col relative text-gray-900 dark:text-gray-100 font-sans selection:bg-cyan-500/30">
       
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
-        <div className="absolute -top-[20%] -right-[10%] w-[70vw] h-[70vw] bg-radial-gradient from-quantum-cyan/10 to-transparent blur-[5rem] opacity-60 dark:opacity-40 animate-pulse-slow" />
-        <div className="absolute -bottom-[20%] -left-[10%] w-[60vw] h-[60vw] bg-radial-gradient from-neural-violet/10 to-transparent blur-[5rem] opacity-60 dark:opacity-40 animate-pulse-slow delay-1000" />
         <div className="absolute inset-0 bg-linear-to-br from-indigo-500/5 via-purple-500/5 to-pink-500/5 pointer-events-none" />
       </div>
 
@@ -788,49 +836,30 @@ export const UserPage: React.FC<UserPageProps> = ({
               <FileView
                 files={filteredFiles}
                 isAuthenticated={isAuthenticated}
-                selectedItems={selectedItems.filter(i => i.type === 'file' || i.type === 'folder')}
-                onToggleSelect={(type, id) => toggleSelectItem(type, id)}
+                selectedItems={fileViewSelection}
+                onToggleSelect={toggleSelectItem}
                 onBatchSelect={handleBatchSelect}
-                onToggleLock={(type, id, status) => toggleItemLock(type, id, !!status)}
-                onRename={handleRename}
-                onDelete={handleDelete}
-                onShare={handleShare}
-                onQrCode={handleFileQrCode}
-                onPreview={(file) => setPreviewFile(file)}
+                onToggleLock={onToggleItemLock}
+                onRename={onRenameFile}
+                onDelete={onDeleteFile}
+                onShare={onShareFile}
+                onQrCode={onQrCodeFile}
+                onPreview={onPreviewItem}
                 username={dashboardData.user?.username || ""}
                 token={token}
-                folders={dashboardData.folders?.filter(f => f.type === 'file') || []}
+                folders={fileFolders}
                 activeFolderId={activeFileFolderId}
-                onMoveItem={handleMoveItem}
-                onFolderClick={(id) => handleFolderNavigation('file', id)}
-                onUpdateFolder={handleUpdateFolder}
-                onDeleteFolder={handleDeleteFolder}
+                onMoveItem={onMoveItem}
+                onFolderClick={onFileFolderClick}
+                onUpdateFolder={onUpdateFolder}
+                onDeleteFolder={onDeleteFolder}
                 viewMode={viewMode}
                 isSelectionMode={isSelectionMode}
                 onSelectionModeChange={setIsSelectionMode}
-                onShareFolder={(folderId) => {
-                  const url = `${window.location.origin}/${dashboardData.user?.username}?tab=file&folder=${folderId}`;
-                  navigator.clipboard?.writeText(url).then(() => alert('資料夾連結已複製！'));
-                }}
-                onQrCodeFolder={(folderId) => {
-                  const url = `${window.location.origin}/${dashboardData.user?.username}?tab=file&folder=${folderId}`;
-                  setQrUrl(url);
-                }}
-                onDownloadFolder={(folderId) => {
-                  const hasFiles = (fId: string): boolean => {
-                     const directFiles = dashboardData.files?.some(f => f.folder_id === fId);
-                     if (directFiles) return true;
-                     const subfolders = dashboardData.folders?.filter(f => f.parent_id === fId) || [];
-                     return subfolders.some(sub => hasFiles(sub.id));
-                  };
-                  if (!hasFiles(folderId)) {
-                    alert('資料夾內無檔案可下載');
-                    return;
-                  }
-                  const downloadUrl = `${API_ORIGIN}/api/user/${dashboardData.user?.username}/folders/${folderId}/download?token=${token || ''}`;
-                  window.open(downloadUrl, '_blank');
-                }}
-                onToggleFolderLock={(type, id, status) => toggleItemLock(type, id, !!status)}
+                onShareFolder={onShareFileFolder}
+                onQrCodeFolder={onQrCodeFileFolder}
+                onDownloadFolder={onDownloadFolder}
+                onToggleFolderLock={onToggleItemLock}
                 isDesktop={isDesktop}
               />
             </motion.div>
@@ -860,31 +889,25 @@ export const UserPage: React.FC<UserPageProps> = ({
               <UrlView
                 urls={filteredUrls}
                 isAuthenticated={isAuthenticated}
-                selectedItems={selectedItems.filter(i => i.type === 'url' || i.type === 'folder')}
-                onToggleSelect={(type, id) => toggleSelectItem(type, id as string)}
-                onBatchSelect={(items, action) => handleBatchSelect(items, action)}
-                onToggleLock={(type, id, status) => toggleItemLock(type, id, !!status)}
+                selectedItems={urlViewSelection}
+                onToggleSelect={toggleSelectItem}
+                onBatchSelect={handleBatchSelect}
+                onToggleLock={onToggleItemLock}
                 onQrCode={setQrUrl}
-                onDelete={handleUrlDelete}
-                onCopy={(url) => { navigator.clipboard?.writeText(url).then(() => alert("已複製！")); }}
-                folders={dashboardData.folders?.filter(f => f.type === 'url') || []}
+                onDelete={onDeleteUrl}
+                onCopy={onCopyUrl}
+                folders={urlFolders}
                 activeFolderId={activeUrlFolderId}
-                onMoveItem={handleMoveItem}
-                onFolderClick={(id) => handleFolderNavigation('url', id)}
-                onUpdateFolder={handleUpdateFolder}
-                onDeleteFolder={handleDeleteFolder}
+                onMoveItem={onMoveItem}
+                onFolderClick={onUrlFolderClick}
+                onUpdateFolder={onUpdateFolder}
+                onDeleteFolder={onDeleteFolder}
                 viewMode={viewMode}
                 isSelectionMode={isSelectionMode}
                 onSelectionModeChange={setIsSelectionMode}
-                onShareFolder={(folderId) => {
-                  const url = `${window.location.origin}/${dashboardData.user?.username}?tab=url&folder=${folderId}`;
-                  navigator.clipboard?.writeText(url).then(() => alert('資料夾連結已複製！'));
-                }}
-                onQrCodeFolder={(folderId: string) => {
-                  const url = `${window.location.origin}/${dashboardData.user?.username}?tab=url&folder=${folderId}`;
-                  setQrUrl(url);
-                }}
-                onPreview={(note) => setPreviewFile(note)}
+                onShareFolder={onShareUrlFolder}
+                onQrCodeFolder={onQrCodeUrlFolder}
+                onPreview={onPreviewItem}
                 isDesktop={isDesktop}
               />
             </motion.div>
@@ -987,7 +1010,9 @@ export const UserPage: React.FC<UserPageProps> = ({
                 <p className="text-sm text-gray-500 break-all line-clamp-2">{qrUrl}</p>
               </div>
               <div className="bg-white p-2 rounded-xl border-2 border-dashed border-gray-200 inline-block mb-6">
-                <QRCodeSVG value={qrUrl} size={200} />
+                <React.Suspense fallback={<div className="w-[200px] h-[200px]" aria-label="QR Code 載入中" />}>
+                  <QRCodeSVG value={qrUrl} size={200} />
+                </React.Suspense>
               </div>
               <div className="flex gap-3">
                 <button
@@ -1138,3 +1163,9 @@ export const UserPage: React.FC<UserPageProps> = ({
     </div>
   );
 };
+
+/**
+ * Memoized so global events that re-render the app shell (e.g. the public
+ * user-list refresh) do not re-render the whole dashboard.
+ */
+export const UserPage = React.memo(UserPageView);

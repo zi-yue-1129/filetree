@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FileText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSelectionBox } from '../../hooks/useSelectionBox';
+import { useStableCallback } from '../../hooks/useStableCallback';
 
 import type { Folder } from './FolderSidebar';
 import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
@@ -55,6 +56,17 @@ const CustomScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
   )
 );
 CustomScroller.displayName = 'CustomScroller';
+
+/** Data handed to the Virtuoso header through its `context` prop. */
+interface FileListContext {
+  folders: React.ReactNode;
+}
+
+/**
+ * Folder cards rendered as the virtual list's header, so they scroll together
+ * with the files (a long folder grid used to push the list out of view).
+ */
+const FoldersHeader: React.FC<{ context?: FileListContext }> = ({ context }) => <>{context?.folders}</>;
 
 interface FileViewProps {
   files: FileItemData[];
@@ -128,7 +140,7 @@ export const FileView: React.FC<FileViewProps> = ({
   const [dragOverFolderId, setDragOverFolderId] = React.useState<string | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const handleRename = async (oldName: string) => {
+  const handleRename = useStableCallback(async (oldName: string) => {
     if (!onRename || !newName.trim() || newName === oldName) {
       setRenamingFile(null);
       return;
@@ -140,7 +152,23 @@ export const FileView: React.FC<FileViewProps> = ({
     } finally {
       setIsRenaming(false);
     }
-  };
+  });
+
+  // O(1) selection lookups; rows get a boolean instead of the whole array.
+  const selectedFileIds = useMemo(
+    () => new Set(selectedItems.filter(i => i.type === 'file').map(i => i.id)),
+    [selectedItems],
+  );
+  const selectedFolderIds = useMemo(
+    () => new Set(selectedItems.filter(i => i.type === 'folder').map(i => i.id)),
+    [selectedItems],
+  );
+  // Drag-and-drop needs the current selection only when a drag starts.
+  const selectedItemsRef = useRef(selectedItems);
+  useLayoutEffect(() => {
+    selectedItemsRef.current = selectedItems;
+  });
+  const getSelectedItems = useCallback(() => selectedItemsRef.current, []);
 
   // Filter folders for current view
   const currentSubfolders = useMemo(() => 
@@ -151,11 +179,13 @@ export const FileView: React.FC<FileViewProps> = ({
   const gridComponents = useMemo(() => ({
     List: GridListContainer,
     Scroller: CustomScroller,
+    Header: FoldersHeader,
   }), []);
 
   const listComponents = useMemo(() => ({
     List: ListContainer,
     Scroller: CustomScroller,
+    Header: FoldersHeader,
   }), []);
 
   // Combine folders and files for selection logic if needed, but virtualization handles them separately usually.
@@ -211,6 +241,86 @@ export const FileView: React.FC<FileViewProps> = ({
 
 
 
+  // Folder cards (few) are not virtualized; they render as the list header.
+  const foldersNode = currentSubfolders.length > 0 ? (
+    <div className="mb-6">
+      <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
+        Folders
+      </h3>
+      <div className={cn(
+        "grid gap-2 sm:gap-4",
+        viewMode === 'grid' 
+          ? "grid-cols-[repeat(auto-fill,minmax(120px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]" 
+          : "grid-cols-1"
+      )}>
+        {currentSubfolders.map(folder => {
+          const isSelected = selectedFolderIds.has(folder.id);
+          return (
+            <FolderItem
+              key={folder.id}
+              folder={folder}
+              isSelected={isSelected}
+              isSelectionMode={isSelectionMode}
+              isAuthenticated={isAuthenticated}
+              onToggleSelect={onToggleSelect}
+              onFolderClick={onFolderClick}
+              onSelectionModeChange={onSelectionModeChange}
+              onUpdateFolder={onUpdateFolder}
+              onDeleteFolder={onDeleteFolder}
+              onMoveItem={onMoveItem}
+              dragOverFolderId={dragOverFolderId}
+              setDragOverFolderId={setDragOverFolderId}
+              renamingFolderId={renamingFolderId}
+              setRenamingFolderId={setRenamingFolderId}
+              folders={folders}
+              onShare={onShareFolder}
+              onQrCode={onQrCodeFolder}
+              onDownloadFolder={onDownloadFolder}
+              onToggleLock={onToggleFolderLock}
+              viewMode={viewMode}
+              isDesktop={isDesktop}
+            />
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+  const listContext: FileListContext = { folders: foldersNode };
+
+  const renderFileItem = (_index: number, file: FileItemData) => {
+    const isRenamingThis = renamingFile === file.name;
+    return (
+      <FileItem
+        key={file.name}
+        file={file}
+        username={username}
+        token={token}
+        isSelected={selectedFileIds.has(file.name)}
+        isSelectionMode={isSelectionMode}
+        isAuthenticated={isAuthenticated}
+        folders={folders}
+        viewMode={viewMode}
+        onToggleSelect={onToggleSelect}
+        onSelectionModeChange={onSelectionModeChange}
+        onPreview={onPreview}
+        onShare={onShare}
+        onQrCode={onQrCode}
+        onDelete={onDelete}
+        onRename={onRename}
+        onToggleLock={onToggleLock}
+        onMoveItem={onMoveItem}
+        renamingFile={isRenamingThis ? renamingFile : null}
+        setRenamingFile={setRenamingFile}
+        setNewName={setNewName}
+        newName={isRenamingThis ? newName : ''}
+        isRenaming={isRenamingThis && isRenaming}
+        handleRename={handleRename}
+        getSelectedItems={getSelectedItems}
+        isDesktop={isDesktop}
+      />
+    );
+  };
+
   return (
     <section className="flex-1 min-h-0 flex flex-col bg-white/60 dark:bg-space-black/40 backdrop-blur-xl rounded-4xl border border-white/40 dark:border-white/5 shadow-2xl overflow-hidden relative">
       <div className="absolute inset-0 bg-linear-to-b from-white/20 to-transparent dark:from-white/5 dark:to-transparent pointer-events-none" />
@@ -238,51 +348,6 @@ export const FileView: React.FC<FileViewProps> = ({
           document.body
         )}
         
-        {/* Render Folders (Non-virtualized for simplicity as usually few) */}
-        {currentSubfolders.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
-              Folders
-            </h3>
-            <div className={cn(
-              "grid gap-2 sm:gap-4",
-              viewMode === 'grid' 
-                ? "grid-cols-[repeat(auto-fill,minmax(120px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]" 
-                : "grid-cols-1"
-            )}>
-              {currentSubfolders.map(folder => {
-                const isSelected = !!selectedItems.find(i => i.type === 'folder' && i.id === folder.id);
-                return (
-                  <FolderItem
-                    key={folder.id}
-                    folder={folder}
-                    isSelected={isSelected}
-                    isSelectionMode={isSelectionMode}
-                    isAuthenticated={isAuthenticated}
-                    onToggleSelect={onToggleSelect}
-                    onFolderClick={onFolderClick}
-                    onSelectionModeChange={onSelectionModeChange}
-                    onUpdateFolder={onUpdateFolder}
-                    onDeleteFolder={onDeleteFolder}
-                    onMoveItem={onMoveItem}
-                    dragOverFolderId={dragOverFolderId}
-                    setDragOverFolderId={setDragOverFolderId}
-                    renamingFolderId={renamingFolderId}
-                    setRenamingFolderId={setRenamingFolderId}
-                    folders={folders}
-                    onShare={onShareFolder}
-                    onQrCode={onQrCodeFolder}
-                    onDownloadFolder={onDownloadFolder}
-                    onToggleLock={onToggleFolderLock}
-                    viewMode={viewMode}
-                    isDesktop={isDesktop}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {(!files || files.length === 0) && currentSubfolders.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-white/20">
             <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center mb-4">
@@ -290,7 +355,9 @@ export const FileView: React.FC<FileViewProps> = ({
             </div>
             <p className="text-sm font-medium">尚無檔案</p>
           </div>
-        ) : (!files || files.length === 0) ? null : (
+        ) : (!files || files.length === 0) ? (
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">{foldersNode}</div>
+        ) : (
           <div className="flex-1 min-h-0 flex flex-col">
             {viewMode === 'grid' ? (
               <VirtuosoGrid
@@ -299,40 +366,8 @@ export const FileView: React.FC<FileViewProps> = ({
                 totalCount={files.length}
                 overscan={200}
                 components={gridComponents}
-                itemContent={(_index, file) => {
-                   const isSelected = !!selectedItems.find(i => i.type === 'file' && i.id === file.name);
-                   return (
-                      <FileItem
-                        key={file.name}
-                        file={file}
-                        username={username}
-                        token={token}
-                        isSelected={isSelected}
-                        isSelectionMode={isSelectionMode}
-                        isAuthenticated={isAuthenticated}
-                        folders={folders}
-                        viewMode={viewMode}
-                        onToggleSelect={onToggleSelect}
-                        onSelectionModeChange={onSelectionModeChange}
-                        onPreview={onPreview}
-                        onBatchSelect={onBatchSelect}
-                        onShare={onShare}
-                        onQrCode={onQrCode}
-                        onDelete={onDelete}
-                        onRename={onRename}
-                        onToggleLock={onToggleLock}
-                        onMoveItem={onMoveItem}
-                        renamingFile={renamingFile}
-                        setRenamingFile={setRenamingFile}
-                        setNewName={setNewName}
-                        newName={newName}
-                        isRenaming={isRenaming}
-                        handleRename={handleRename}
-                        selectedItems={selectedItems}
-                        isDesktop={isDesktop}
-                      />
-                   );
-                }}
+                context={listContext}
+                itemContent={renderFileItem}
               />
             ) : (
                 <Virtuoso
@@ -341,40 +376,8 @@ export const FileView: React.FC<FileViewProps> = ({
                 totalCount={files.length}
                 overscan={200}
                 components={listComponents}
-                itemContent={(_index, file) => {
-                   const isSelected = !!selectedItems.find(i => i.type === 'file' && i.id === file.name);
-                   return (
-                      <FileItem
-                        key={file.name}
-                        file={file}
-                        username={username}
-                        token={token}
-                        isSelected={isSelected}
-                        isSelectionMode={isSelectionMode}
-                        isAuthenticated={isAuthenticated}
-                        folders={folders}
-                        viewMode={viewMode}
-                        onToggleSelect={onToggleSelect}
-                        onSelectionModeChange={onSelectionModeChange}
-                        onPreview={onPreview}
-                        onBatchSelect={onBatchSelect}
-                        onShare={onShare}
-                        onQrCode={onQrCode}
-                        onDelete={onDelete}
-                        onRename={onRename}
-                        onToggleLock={onToggleLock}
-                        onMoveItem={onMoveItem}
-                        renamingFile={renamingFile}
-                        setRenamingFile={setRenamingFile}
-                        setNewName={setNewName}
-                        newName={newName}
-                        isRenaming={isRenaming}
-                        handleRename={handleRename}
-                        selectedItems={selectedItems}
-                        isDesktop={isDesktop}
-                      />
-                   );
-                }}
+                context={listContext}
+                itemContent={renderFileItem}
               />
             )}
           </div>
