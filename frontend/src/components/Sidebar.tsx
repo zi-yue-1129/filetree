@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { FileUp, ShieldCheck, HelpCircle, Sun, Moon, Smartphone, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { isMobileNative } from '../native';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../hooks/useTheme';
 import { EffectsToggle } from './EffectsToggle';
 
 interface SidebarProps {
