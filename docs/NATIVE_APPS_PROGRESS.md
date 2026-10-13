@@ -3,6 +3,84 @@
 Newest entries first. Each entry: date, workstream, branch, what is done,
 what is next, how to verify. See `docs/NATIVE_APPS.md` for the contract.
 
+## 2026-10-13 — iOS (Codex), branch `feat/native-ios` — completed implementation / final verification
+
+Done
+- Complete iOS FileNexusNative bridge, app-local Keychain (service names also
+  separate the two executables if a signer reuses profiles), persisted native
+  TUS jobs/original files/offsets, 8 MiB file-backed background PATCH tasks,
+  background create/HEAD stages, 10-attempt backoff using earliestBeginDate,
+  local notifications and JS events, server termination and native picker.
+  HTTP 200 fingerprint resume, zero-byte PATCH finalization, token/origin
+  changes, suspension/reconnect, and permanent-vs-retryable failures are handled.
+- PhotoKit originals (including RAW alternates and optional Live Photo video),
+  creation-date + localIdentifier scan/completion checkpoints, per-resource
+  enqueue deduplication, failed-asset retry identities that survive queue cleanup,
+  50-asset scans, permission status, activation/change triggers and best-effort
+  BGProcessingTask/BGAppRefreshTask. Mutable async services are MainActor-isolated.
+- Embedded ShareExtension accepts files/images/videos/URLs; URLs become text
+  files. **Default free SideStore path:** no mandatory App Group or Keychain
+  sharing entitlement; independent extension device login and visible foreground
+  URLSession uploads until completion. Cancel stops retries and cancels pending
+  jobs. This is the selected path for unsigned IPA/free signing.
+- **Optional group path:** detect the actual installed profile's group entitlement
+  and verify container access; protected configuration/inbox files; independent
+  background session with sharedContainerIdentifier, reconnected by AppDelegate.
+  SideStore's signing code appends Team ID to group identifiers, so hardcoded
+  container names fail after resigning. Reading provisioned identifiers avoids
+  that mismatch. No extension-private file path or token is passed in a URL.
+  Evidence: https://github.com/SideStore/SideStore/blob/develop/SideStore/Core/Operations/PipelineOperations/FetchProvisioningProfilesOperation.swift
+- Existing generated icon retained. Capgo SPM linking, manual mode and 10-second
+  rollback timeout verified in the actual IPA. Build workflow uses macos-15 with
+  Xcode 26.3; workflow_call release mode and push/dispatch artifacts-only mode;
+  versioned unsigned IPA plus v2 source JSON and inspection report. Release mode
+  requires an existing draft; it is configured but not invoked by test pushes.
+- Friend-facing zh-TW instructions: docs/IOS_SIDELOAD.md. SideStore docs checked
+  live: LocalDevVPN + iLoader are current; pairing, seven-day refresh, three-app /
+  ten-App-ID limits, keeping the extension, Photos and notification access covered.
+
+CI and artifact evidence
+- https://github.com/zi-yue-1129/filetree/actions/runs/38384742467 — SUCCESS,
+  Xcode 26.3 archive, executable protocol checks, 8/8 iOS simulator tests.
+  Downloaded and independently inspected on Linux: Payload/App.app/App and
+  Payload/App.app/PlugIns/ShareExtension.appex/ShareExtension; correct bundle IDs,
+  arm64 Mach-O, no LC_CODE_SIGNATURE in either executable; Capgo and plugin
+  registration present. IPA size 5,694,749 bytes; source JSON size matches.
+- https://github.com/zi-yue-1129/filetree/actions/runs/38385463939 — SUCCESS,
+  final implementation commit 850bcf6: protocol checks, archive, **10/10 simulator
+  tests**, IPA packaging/identity/arm64/unsigned checks and artifact upload passed.
+  This adds acknowledged-offset resume and durable retry regressions. Downloaded
+  final-code IPA independently: both executables present, arm64, no code signature;
+  bundle versions 0.0.1; native/Capgo registration and manual-update settings present.
+  IPA size 5,695,219 bytes; SHA256:
+  `adb7d785787c2bba1891a0094bebafd09b71ee08edd8959f36688c4def5e9b75`.
+  The accompanying v2 source JSON advertises the exact byte size. Documentation-only
+  handoff commit will trigger the same build gate again; no runtime changes follow.
+- Earlier runs 38382598162 and 38383520518 failed on lipo argument order and
+  hostless XCTest notification-center access, respectively; both were fixed.
+  Simulator tests inject notification delivery; actual notification permission /
+  presentation remain device checks. URLProtocol fixtures exercise the production
+  queue using foreground file tasks; they do not verify Apple's background daemon.
+
+Real iPhone acceptance and limitations
+- Install/re-sign via a free Apple ID in SideStore, keep the extension, verify
+  independent extension login, Files/Photos/Safari providers and large media.
+  Without a group, keep the share UI open; iOS can terminate an extension under
+  resource pressure. Its jobs/credentials are separate from the main app queue;
+  revoke the "iPhone 分享" device to sign out of that path. Main logout alone does
+  not revoke its token. Optional rewritten App Group mode remains unverified.
+- Verify background suspend/relaunch, network interruption and resume, cancellation,
+  token revocation, local notifications, limited/full Photos access, RAW/Live Photo
+  originals, creation-date ties, failed-asset retry, BG expiration/scheduling and
+  Capgo next-start/rollback. No APNs under free signing. Force-quit cancels system
+  transfers; iOS determines BG execution opportunities.
+- Wi-Fi-only backup uploads are constrained; iCloud-only originals are not fetched
+  in this mode and surface an export error. Download originals in Photos first.
+  New-asset selection starts at enable time; imports dated before the creation
+  checkpoint require manual picker/share upload.
+- Ownership: only iOS-owned files and this shared progress log changed. The shared
+  TypeScript API, Capacitor configuration and backend contract remain unchanged.
+
 ## 2026-10-13 — iOS (Codex), branch `feat/native-ios` — implementation / CI pending
 
 - Done: app-local Keychain configuration; durable file-backed TUS queue with

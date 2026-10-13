@@ -28,3 +28,8 @@ Files/Photos/Safari, suspend/relaunch the main app, interrupt network and resume
 revoke a token, verify notifications, limited Photos access, backup checkpoints,
 and Capgo next-start/rollback. Force-quitting cancels iOS background transfers;
 BG execution and extension lifetime are controlled by iOS.
+
+Verified: implementation commit 850bcf6 passed Xcode 26.3 archive, production TUS
+protocol checks and 10 iOS simulator queue regressions in CI run 38385463939. Both
+unsigned arm64 executables were checked independently in the downloaded IPA. See
+docs/NATIVE_APPS_PROGRESS.md for run links, artifact details and device limitations.
