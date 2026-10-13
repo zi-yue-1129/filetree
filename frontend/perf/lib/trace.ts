@@ -16,6 +16,13 @@ export const TRACE_CATEGORIES: string[] = [
   'viz',
 ];
 
+/**
+ * Smaller set for long windows (selecting 50 files takes minutes on the slow
+ * builds and the full set exceeds V8's maximum string length). GPU/raster busy
+ * time still comes from the `toplevel` task events.
+ */
+export const LIGHT_TRACE_CATEGORIES: string[] = ['toplevel', 'devtools.timeline', 'v8.execute', 'blink.user_timing'];
+
 /** Raw trace event (subset of fields used here). */
 interface TraceEvent {
   name: string;

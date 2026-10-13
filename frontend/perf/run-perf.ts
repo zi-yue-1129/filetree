@@ -11,6 +11,8 @@
  * phone with 6x CPU throttling (hardwareConcurrency 4, deviceMemory 2), runs
  * the scenarios N times per theme, writes `perf/results/<label>.json` and
  * prints medians as markdown. Compare files with `node perf/compare.ts a.json b.json`.
+ * `--dist <dir>` serves another build output (e.g. a baseline build) instead
+ * of the configured `build.outDir`.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -81,6 +83,7 @@ async function main(): Promise<void> {
       screenshots: { type: 'string' },
       'backend-port': { type: 'string', default: '5291' },
       'preview-port': { type: 'string', default: '4291' },
+      dist: { type: 'string' },
     },
   });
   if (!values.label) throw new Error('--label is required');
@@ -100,26 +103,43 @@ async function main(): Promise<void> {
     frontendDir,
     backendPort: Number(values['backend-port']),
     previewPort: Number(values['preview-port']),
+    distDir: values.dist ? path.resolve(values.dist) : null,
   });
   log(`stack up at ${stack.baseUrl} (data ${stack.dataDir})`);
   const browser = await chromium.launch({ channel: 'chromium', headless: true });
   const table: RunTable = {};
+  const result: ResultFile = {
+    label: values.label,
+    createdAt: new Date().toISOString(),
+    options: { ...values, runs },
+    runs: table,
+  };
+  const resultsDir = path.join(frontendDir, 'perf', 'results');
+  mkdirSync(resultsDir, { recursive: true });
+  const outPath = path.join(resultsDir, `${values.label}.json`);
+  // Persist after every run so a late failure keeps the finished runs.
+  const persist = (): void => writeFileSync(outPath, `${JSON.stringify(result, null, 2)}\n`);
+  // Uploads grow the data set, so every other scenario runs first (all themes).
+  const ordered = [
+    ...scenarioNames.filter((name) => name !== 'upload'),
+    ...scenarioNames.filter((name) => name === 'upload'),
+  ];
   try {
     const auth = await login(stack.baseUrl);
-    for (const theme of themes) {
-      table[theme] = {};
-      const device: DeviceOptions = {
-        cpuThrottle: Number(values.cpu),
-        hardwareConcurrency: Number(values.hw),
-        deviceMemory: Number(values.mem),
-        slowNetwork: values['slow-network'],
-        theme,
-        effects,
-        viewport: values.desktop ? { width: 1440, height: 900 } : { width: 390, height: 844 },
-        mobile: !values.desktop,
-      };
-      for (const name of scenarioNames) {
+    for (const name of ordered) {
+      for (const theme of themes) {
+        table[theme] ??= {};
         table[theme][name] = [];
+        const device: DeviceOptions = {
+          cpuThrottle: Number(values.cpu),
+          hardwareConcurrency: Number(values.hw),
+          deviceMemory: Number(values.mem),
+          slowNetwork: values['slow-network'],
+          theme,
+          effects,
+          viewport: values.desktop ? { width: 1440, height: 900 } : { width: 390, height: 844 },
+          mobile: !values.desktop,
+        };
         for (let run = 0; run < runs; run += 1) {
           const started = Date.now();
           const metrics = await SCENARIOS[name]({
@@ -133,6 +153,7 @@ async function main(): Promise<void> {
             screenshotDir: values.screenshots && run === 0 ? path.join(values.screenshots, theme) : null,
           });
           table[theme][name].push(metrics);
+          persist();
           log(`${theme}/${name} run ${run + 1}/${runs} done in ${((Date.now() - started) / 1000).toFixed(1)} s`);
         }
       }
@@ -141,16 +162,6 @@ async function main(): Promise<void> {
     await browser.close();
     await stack.stop();
   }
-  const result: ResultFile = {
-    label: values.label,
-    createdAt: new Date().toISOString(),
-    options: { ...values, runs },
-    runs: table,
-  };
-  const resultsDir = path.join(frontendDir, 'perf', 'results');
-  mkdirSync(resultsDir, { recursive: true });
-  const outPath = path.join(resultsDir, `${values.label}.json`);
-  writeFileSync(outPath, `${JSON.stringify(result, null, 2)}\n`);
   log(`wrote ${outPath}`);
   process.stdout.write(`${renderComparison([result])}\n`);
 }

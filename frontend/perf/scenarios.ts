@@ -17,7 +17,7 @@ import {
   usedHeapMiB,
   type DeviceOptions,
 } from './lib/page.ts';
-import { summarizeTrace, TRACE_CATEGORIES, type TraceSummary } from './lib/trace.ts';
+import { summarizeTrace, LIGHT_TRACE_CATEGORIES, TRACE_CATEGORIES, type TraceSummary } from './lib/trace.ts';
 
 /** Flat metric bag of one scenario run. */
 export type Metrics = Record<string, number>;
@@ -93,10 +93,16 @@ function traceMetrics(prefix: string, trace: TraceSummary, perSecond: boolean): 
  * @param context - Scenario context.
  * @param page - Page to trace.
  * @param action - Work to perform while tracing.
+ * @param categories - Trace categories (long scenarios use a lighter set).
  * @returns The trace summary.
  */
-async function traced(context: ScenarioContext, page: Page, action: () => Promise<void>): Promise<TraceSummary> {
-  await context.browser.startTracing(page, { categories: TRACE_CATEGORIES });
+async function traced(
+  context: ScenarioContext,
+  page: Page,
+  action: () => Promise<void>,
+  categories: string[] = TRACE_CATEGORIES,
+): Promise<TraceSummary> {
+  await context.browser.startTracing(page, { categories });
   let buffer: Buffer;
   try {
     await action();
@@ -312,7 +318,7 @@ export async function selectScenario(context: ScenarioContext): Promise<Metrics>
         clicked.add(dataId);
       }
       await page.waitForTimeout(500);
-    });
+    }, LIGHT_TRACE_CATEGORIES);
     const wallMs = Date.now() - wallStart;
     const end = await pageNow(page);
     const observations = await readObservations(page);

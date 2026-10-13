@@ -2,7 +2,7 @@
  * Capture visual-check screenshots (no throttling) of the landing page, the
  * dashboard and the uploader for every theme x effects x viewport combination.
  *
- *   PERF_PYTHON=/path/to/venv/bin/python timeout 600 node perf/screenshots.ts --out /tmp/shots
+ *   PERF_PYTHON=/path/to/venv/bin/python timeout 600 node perf/screenshots.ts --out /tmp/shots [--dist dir]
  */
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -45,6 +45,7 @@ async function main(): Promise<void> {
       effects: { type: 'string', default: 'full,low' },
       'backend-port': { type: 'string', default: '5292' },
       'preview-port': { type: 'string', default: '4292' },
+      dist: { type: 'string' },
     },
   });
   if (!values.out) throw new Error('--out is required');
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
     frontendDir,
     backendPort: Number(values['backend-port']),
     previewPort: Number(values['preview-port']),
+    distDir: values.dist ? path.resolve(values.dist) : null,
   });
   const browser = await chromium.launch({ channel: 'chromium', headless: true });
   try {

@@ -31,6 +31,8 @@ export interface StackOptions {
   backendPort: number;
   /** Preview port. */
   previewPort: number;
+  /** Build output to serve; null serves the configured `build.outDir`. */
+  distDir?: string | null;
 }
 
 const SEED_TIMEOUT_MS = 300_000;
@@ -120,6 +122,7 @@ export async function startStack(options: StackOptions): Promise<Stack> {
       root: options.frontendDir,
       configFile: path.join(options.frontendDir, 'vite.config.ts'),
       logLevel: 'warn',
+      ...(options.distDir ? { build: { outDir: options.distDir } } : {}),
       preview: {
         host: '127.0.0.1',
         port: options.previewPort,
