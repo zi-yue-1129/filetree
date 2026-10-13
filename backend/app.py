@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     push_service.startup()
     logger.info("Startup: Initializing databases...")
     await init_db()
+    from backend.services.token_service import token_service
+    await run_in_threadpool(token_service.load)
 
     # Startup: Reconcile disk ↔ DB
     logger.info("Startup: Reconciling file index...")
