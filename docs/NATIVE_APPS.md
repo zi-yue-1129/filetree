@@ -80,8 +80,15 @@ Clients fetch from
 Signing secrets (GitHub Actions secrets; never commit keys):
 `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
 `ANDROID_KEY_PASSWORD`, `TAURI_SIGNING_PRIVATE_KEY`,
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Production API URL comes from repo
-variable `VITE_API_BASE_URL`.
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (all already set). Repo variables:
+`VITE_API_BASE_URL` (production API URL, currently
+`https://api-filetree.spkuan.cc`) and `TAURI_UPDATER_PUBKEY` (the Tauri
+updater public key; inject it into `tauri.conf.json` `plugins.updater.pubkey`
+at build time). Private keys live only on the owner's machine in
+`~/.config/filenexus-release/` and in GitHub secrets.
+
+`release.yml` creates the release as a **draft**; `build-*.yml` upload into
+the draft; the final job publishes it as latest only when every build passed.
 
 Workflows: each `build-*.yml` is a reusable workflow (`on: workflow_call` with
 input `version`, plus `workflow_dispatch` for manual test builds that upload
