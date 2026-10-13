@@ -251,8 +251,8 @@ async def create_share(
         raise HTTPException(status_code=404, detail="使用者不存在")
 
     # Check locks
-    is_locked = user["is_locked"] or await file_service.is_file_locked(
-        user["folder"], filename
+    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
+        user["folder"], username, filename
     )
     if is_locked:
         if not token:
@@ -284,13 +284,15 @@ async def get_share_info(token: str):
     from backend.services.database import get_files_db
     db = await get_files_db()
     cursor = await db.execute(
-        "SELECT folder_id, size_bytes, is_locked FROM files "
-        "WHERE username = ? AND filename = ?",
+        "SELECT size_bytes FROM files WHERE username = ? AND filename = ?",
         (user["folder"], info.filename),
     )
     row = await cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="檔案不存在")
+    is_locked = await file_service.is_file_effectively_locked(
+        user["folder"], info.username, info.filename
+    )
 
     size_bytes = row["size_bytes"]
     size_mb = round(size_bytes / (1024 * 1024), 2)
@@ -306,7 +308,7 @@ async def get_share_info(token: str):
         size=size_str,
         size_bytes=size_bytes,
         expiry=info.expiry,
-        is_locked=bool(row["is_locked"]),
+        is_locked=is_locked,
         preview_url=preview_url,
         download_url=download_url,
         thumbnail_url=thumbnail_url
@@ -359,8 +361,8 @@ async def download_direct(
         raise HTTPException(status_code=404, detail="使用者不存在")
 
     # Check locks
-    is_locked = user["is_locked"] or await file_service.is_file_locked(
-        user["folder"], filename
+    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
+        user["folder"], username, filename
     )
     if is_locked:
         if not token:
@@ -416,8 +418,8 @@ async def get_thumbnail(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    is_locked = user["is_locked"] or await file_service.is_file_locked(
-        user["folder"], filename
+    is_locked = user["is_locked"] or await file_service.is_file_effectively_locked(
+        user["folder"], username, filename
     )
     if is_locked:
         if not token:
@@ -784,25 +786,18 @@ async def batch_download(
         if p_user and p_user["username"] == username:
             auth_success = True
 
-    from backend.services.database import get_files_db
-    db = await get_files_db()
+    folders_by_id = {
+        folder["id"]: folder
+        for folder in await user_service.get_folders_by_username(username)
+    }
 
-    # Bulk-load file metadata (chunked to stay under SQLite's variable limit)
-    file_meta_by_name: dict = {}
-    unique_filenames = list(dict.fromkeys(filenames))
-    for start in range(0, len(unique_filenames), 500):
-        chunk = unique_filenames[start:start + 500]
-        placeholders = ",".join("?" for _ in chunk)
-        cursor = await db.execute(
-            "SELECT filename, folder_id, is_locked FROM files "
-            f"WHERE username = ? AND filename IN ({placeholders})",
-            (user["folder"], *chunk),
-        )
-        for row in await cursor.fetchall():
-            file_meta_by_name[row["filename"]] = row
+    # Bulk-load placement and effective lock state (file or ancestor folder)
+    access_by_name = await file_service.get_file_access_records(
+        user["folder"], username, filenames, folders_by_id
+    )
 
     # Check if any file is locked — require authentication if so
-    has_locked = any(bool(row["is_locked"]) for row in file_meta_by_name.values())
+    has_locked = any(record.is_locked for record in access_by_name.values())
 
     if has_locked or user["is_locked"]:
         if not auth_success:
@@ -815,15 +810,10 @@ async def batch_download(
     temp_zip_path = temp_zip.name
     temp_zip.close()
 
-    folders_by_id = {
-        folder["id"]: folder
-        for folder in await user_service.get_folders_by_username(username)
-    }
-
     with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for fname in filenames:
-            row = file_meta_by_name.get(fname)
-            fid = row["folder_id"] if row else None
+            record = access_by_name.get(fname)
+            fid = record.folder_id if record else None
             path_names = user_service.folder_path_names_from_map(folders_by_id, fid)
             folder_path = file_service._get_folder_path(user["folder"], path_names)
             file_path = folder_path / fname
