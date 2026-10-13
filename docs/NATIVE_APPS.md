@@ -188,7 +188,11 @@ full version tag.
   `frontend/native-plugin/src/definitions.ts`): `configure` also takes
   optional `deviceId`/`deviceName`; `getConfiguration`, `getNativeInfo`,
   `pickFiles` (WebView file inputs cannot yield native URIs),
-  `clearFinishedUploads`, `clearSharedItems`, `runPhotoBackupNow`,
+  `pickFolder` → `{folderName, files, skippedCount}` (WebViews do not support
+  `<input webkitdirectory>`; each file carries `relativePath` =
+  `<folder>/<sub dirs>/<name>` like the web uploader, and the backend
+  recreates the folders; Android lists a SAF tree with a persisted read grant,
+  iOS copies the folder's files into app storage), `clearFinishedUploads`, `clearSharedItems`, `runPhotoBackupNow`,
   `checkPermissions`/`requestPermissions`, event `pushReceived`; Android-only
   `canInstallPackages`, `openInstallPermissionSettings`, `installApkUpdate` +
   event `apkDownloadProgress`. Rejections carry a `FileNexusErrorCode` `code`.

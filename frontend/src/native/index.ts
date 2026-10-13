@@ -141,6 +141,39 @@ export async function pickNativeFiles(multiple = true): Promise<NativeFile[]> {
   }
 }
 
+/** Outcome of {@link pickNativeFolder}. */
+export interface NativeFolderPick {
+  /** Display name of the picked folder. */
+  folderName: string;
+  /** Files below the folder, each with `relativePath` starting at `folderName`. */
+  files: NativeFile[];
+  /** Entries the platform could not upload and left out. */
+  skippedCount: number;
+}
+
+/**
+ * Open the system folder picker (Android SAF tree / iOS folder picker).
+ *
+ * @returns The picked folder's files, or `null` if the user cancelled.
+ * @throws Error (zh-TW) when the installed app predates folder upload, or the
+ * plugin's own error for any other failure.
+ */
+export async function pickNativeFolder(): Promise<NativeFolderPick | null> {
+  try {
+    return await FileNexusNative.pickFolder();
+  } catch (error: unknown) {
+    const code = getNativeErrorCode(error);
+    if (code === 'CANCELLED') {
+      return null;
+    }
+    if (code === 'UNIMPLEMENTED') {
+      // A live-updated web bundle can run inside an older native shell.
+      throw new Error('此 App 版本不支援上傳資料夾，請先到「App 設定」更新 App', { cause: error });
+    }
+    throw error;
+  }
+}
+
 /**
  * List native upload jobs, newest first.
  *

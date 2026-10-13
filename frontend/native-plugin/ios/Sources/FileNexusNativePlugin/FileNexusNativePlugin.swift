@@ -15,13 +15,15 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
     public let jsName: String = "FileNexusNative"
     /// Every promise method in definitions.ts, including runtime permissions.
     public let pluginMethods: [CAPPluginMethod] = [
-        "configure", "getConfiguration", "getNativeInfo", "pickFiles", "enqueueUpload", "getUploads",
+        "configure", "getConfiguration", "getNativeInfo", "pickFiles", "pickFolder", "enqueueUpload", "getUploads",
         "cancelUpload", "clearFinishedUploads", "getSharedItems", "clearSharedItems", "setPhotoBackup",
         "getPhotoBackupStatus", "runPhotoBackupNow", "registerPush", "canInstallPackages",
         "openInstallPermissionSettings", "installApkUpdate", "checkPermissions", "requestPermissions"
     ].map { CAPPluginMethod(name: $0, returnType: CAPPluginReturnPromise) }
     private let logger: Logger = Logger(subsystem: "cc.spkuan.filenexus", category: "Plugin")
     private var pickerCall: CAPPluginCall?
+    /// Whether the open picker serves `pickFolder` (else `pickFiles`).
+    private var pickerWantsFolder: Bool = false
     private var observers: [NSObjectProtocol] = []
 
     /// Forward native lifecycle events while the WebView is alive.
@@ -100,6 +102,21 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
             picker.delegate = self
             guard let viewController = self.bridge?.viewController else { self.reject(call, NativeFailure("App view controller is unavailable")); return }
             self.pickerCall = call
+            self.pickerWantsFolder = false
+            viewController.present(picker, animated: true)
+        }
+    }
+
+    /// Present a folder picker; its files are copied into app storage with folder-relative paths.
+    @objc public func pickFolder(_ call: CAPPluginCall) -> Void {
+        DispatchQueue.main.async {
+            guard self.pickerCall == nil else { self.reject(call, NativeFailure("A file picker is already open", code: "INVALID_ARGUMENT")); return }
+            let picker: UIDocumentPickerViewController = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
+            picker.allowsMultipleSelection = false
+            picker.delegate = self
+            guard let viewController = self.bridge?.viewController else { self.reject(call, NativeFailure("App view controller is unavailable")); return }
+            self.pickerCall = call
+            self.pickerWantsFolder = true
             viewController.present(picker, animated: true)
         }
     }
@@ -108,6 +125,14 @@ public class FileNexusNativePlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPicke
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) -> Void {
         guard let call = pickerCall else { return }
         pickerCall = nil
+        if pickerWantsFolder {
+            guard let folder = urls.first else { reject(call, NativeFailure("The folder picker returned no folder")); return }
+            // Copying a whole folder can take a while; keep the UI responsive.
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { call.resolve(try NativeStorage.copyFolder(folder, to: try NativeStorage.directory("picked"))) } catch { self.reject(call, error) }
+            }
+            return
+        }
         do {
             let directory: URL = try NativeStorage.directory("picked")
             let files: [[String: Any]] = try urls.map { url in

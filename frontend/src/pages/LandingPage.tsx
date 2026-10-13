@@ -12,7 +12,7 @@ import type Uppy from '@uppy/core';
 // Uppy styles
 import '@uppy/core/css/style.min.css';
 import { apiUrl } from '../services/api';
-import { getErrorMessage, isMobileNative, pickNativeFiles } from '../native';
+import { getErrorMessage, isMobileNative, pickNativeFiles, pickNativeFolder } from '../native';
 import type { NativeFile } from '../native';
 import { NativePendingFilesPanel } from '../native/landing/NativePendingFilesPanel';
 import { enqueueLandingFiles } from '../native/landing/landingUpload';
@@ -227,6 +227,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
       .catch((err: unknown) => {
         console.error('Native file picker failed', err);
         alert(`無法選擇檔案：${getErrorMessage(err)}`);
+      });
+  };
+
+  const handleNativePickFolder = () => {
+    pickNativeFolder()
+      .then((picked) => {
+        if (!picked) {
+          return;
+        }
+        if (picked.files.length === 0) {
+          alert(`資料夾「${picked.folderName}」中沒有可上傳的檔案`);
+        } else {
+          setNativeFiles((previous) => [...previous, ...picked.files]);
+        }
+        if (picked.skippedCount > 0) {
+          alert(`已略過 ${picked.skippedCount} 個無法上傳的項目（例如雲端文件捷徑）`);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('Native folder picker failed', err);
+        alert(`無法選擇資料夾：${getErrorMessage(err)}`);
       });
   };
 
@@ -555,6 +576,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
               onSubmit={handleSubmit}
               isSyncing={isSyncing}
               onNativePickFiles={nativeMode ? handleNativePick : undefined}
+              onNativePickFolder={nativeMode ? handleNativePickFolder : undefined}
            />
         </div>
 

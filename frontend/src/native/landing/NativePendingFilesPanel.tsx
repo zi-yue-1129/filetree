@@ -36,7 +36,9 @@ export const NativePendingFilesPanel: React.FC<NativePendingFilesPanelProps> = (
           <div key={`${file.uri}-${index}`} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 px-3 py-2">
             <FileText className="w-4 h-4 shrink-0 text-cyan-500" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm truncate text-gray-800 dark:text-white/80">{file.name}</p>
+              <p className="text-sm truncate text-gray-800 dark:text-white/80" title={file.relativePath ?? file.name}>
+                {file.relativePath ?? file.name}
+              </p>
               <p className="text-[0.65rem] text-gray-400 dark:text-white/40">{formatBytes(file.size ?? -1)}</p>
             </div>
             <button
