@@ -14,7 +14,9 @@ services:
     ports:
       - "127.0.0.1:5168:5168"
     volumes:
-      - ./data:/app/data
+      # Host directory holding users.db / files.db / notes.db / uploads/ etc.
+      # Set DATA_DIR in .env to use an existing data directory on another disk.
+      - ${DATA_DIR:-./data}:/app/data
 
   cloudflared:
     image: cloudflare/cloudflared:latest
