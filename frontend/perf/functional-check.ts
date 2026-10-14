@@ -91,6 +91,31 @@ async function checkLanding(page: Page, baseUrl: string, workDir: string): Promi
 }
 
 /**
+ * Phone: the navigation menu (left) and the user directory (right) are
+ * mutually exclusive drawers. Opening one must close the other; before, both
+ * could be open at once, stacking two backdrops and overlapping panels.
+ *
+ * @param page - Phone page.
+ * @param baseUrl - App URL.
+ */
+async function checkExclusiveDrawers(page: Page, baseUrl: string): Promise<void> {
+  await page.goto(`${baseUrl}/`);
+  await page.getByText('資料傳輸核心').waitFor();
+  const backdrops = page.locator('div.fixed.inset-0.backdrop-blur-sm');
+  await page.getByRole('button', { name: '功能選單' }).click();
+  await backdrops.first().waitFor();
+  await page.getByRole('button', { name: '目錄' }).click();
+  // Let the closing drawer's exit animation finish.
+  await page.waitForTimeout(800);
+  const openBackdrops = await backdrops.count();
+  check(openBackdrops === 1, `opening the directory must close the menu, found ${openBackdrops} drawer backdrops`);
+  await page.getByRole('button', { name: '功能選單' }).click();
+  await page.waitForTimeout(800);
+  const afterSwitchBack = await backdrops.count();
+  check(afterSwitchBack === 1, `opening the menu must close the directory, found ${afterSwitchBack} drawer backdrops`);
+}
+
+/**
  * The brand footer must not float over content on phones. With the on-screen
  * keyboard open the visual viewport shrinks and a `position: fixed` footer
  * sat right above the keyboard, covering the form field being typed into.
@@ -585,6 +610,7 @@ async function main(): Promise<void> {
         page.on('request', (request) => requestedUrls.push(request.url()));
         // First, while the UserPage chunk is still unloaded (fresh page).
         if (mobile) await checkDirectoryFirstNavigation(page, stack.baseUrl);
+        if (mobile) await checkExclusiveDrawers(page, stack.baseUrl);
         await checkLanding(page, stack.baseUrl, workDir);
         await checkFooterPlacement(page, mobile);
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
