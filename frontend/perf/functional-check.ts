@@ -394,6 +394,10 @@ async function checkCardMenuButtons(page: Page, baseUrl: string): Promise<void> 
       if (overlaps(button.getBoundingClientRect(), visibleText)) {
         problems.push(`folder ⋮ overlaps the name "${name.textContent?.trim()}"`);
       }
+      // Short names such as "專案 0" must be readable in full, not "專…".
+      if (textBox.right - clipBox.right > 0.5) {
+        problems.push(`folder name "${name.textContent?.trim()}" is truncated to ${Math.round(clipBox.width)}px of ${Math.round(textBox.width)}px`);
+      }
     }
     for (const card of Array.from(document.querySelectorAll('.file-item[data-id^="file:"]')).slice(0, 6)) {
       const button = card.querySelector('button[aria-label$="的操作"]');
