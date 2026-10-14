@@ -53,7 +53,7 @@ const FolderRow: React.FC<FolderRowProps> = ({ folder, onRemove }) => {
           aria-expanded={expanded}
           aria-label={expanded ? `收合 ${folder.folderName}` : `顯示 ${folder.folderName} 的檔案`}
           onClick={() => setExpanded((previous) => !previous)}
-          className="flex flex-1 min-w-0 items-center gap-3 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
+          className="flex flex-1 min-w-0 min-h-11 items-center gap-3 text-left rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
         >
           {expanded
             ? <ChevronDown className="w-4 h-4 shrink-0 text-gray-400" />
@@ -70,7 +70,7 @@ const FolderRow: React.FC<FolderRowProps> = ({ folder, onRemove }) => {
           type="button"
           aria-label={`移除資料夾 ${folder.folderName}`}
           onClick={onRemove}
-          className="p-1 rounded-lg hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
+          className="relative tap-target p-1 rounded-lg hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
         >
           <X className="w-4 h-4 text-red-500" />
         </button>
@@ -126,7 +126,7 @@ export const NativePendingFilesPanel: React.FC<NativePendingFilesPanelProps> = (
                   type="button"
                   aria-label={`移除 ${file.name}`}
                   onClick={() => onRemove(index)}
-                  className="p-1 rounded-lg hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
+                  className="relative tap-target p-1 rounded-lg hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
                 >
                   <X className="w-4 h-4 text-red-500" />
                 </button>

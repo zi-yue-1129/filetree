@@ -44,7 +44,8 @@ export const EffectsToggle: React.FC = () => {
       type="button"
       onClick={() => setPreference(NEXT_PREFERENCE[preference])}
       className={cn(
-        'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors cursor-pointer group',
+        // min-h-11: 44px touch target on phones (a text-xs row is 42px).
+        'w-full flex items-center gap-3 px-4 py-3 min-h-11 lg:min-h-0 rounded-xl transition-colors cursor-pointer group',
         'text-left text-xs font-medium tracking-wide',
         'text-gray-600 dark:text-white/40 hover:text-gray-900 dark:hover:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5 border border-transparent',
       )}

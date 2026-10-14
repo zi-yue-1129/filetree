@@ -21,7 +21,7 @@ export const UserPageHeader: React.FC<UserPageHeaderProps> = ({
   onShowSettings
 }) => {
   return (
-    <header className="flex flex-col gap-1 sm:gap-3 px-2 pt-2 sm:px-4 sm:pt-4 lg:pt-0 lg:px-4 relative z-10 lg:pl-4 bg-white/40 dark:bg-black/20 backdrop-blur-xl border-b border-white/10 lg:bg-transparent lg:backdrop-blur-none lg:border-none">
+    <header className="flex flex-col gap-1 sm:gap-3 px-2 pt-2 pb-1 sm:px-4 sm:pt-4 lg:pt-0 lg:pb-0 lg:px-4 relative z-10 lg:pl-4 bg-white/40 dark:bg-black/20 backdrop-blur-xl border-b border-white/10 lg:bg-transparent lg:backdrop-blur-none lg:border-none">
       
       {/* Row 1: Profile & Actions */}
       <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -49,7 +49,7 @@ export const UserPageHeader: React.FC<UserPageHeaderProps> = ({
           <button
             onClick={() => isAuthenticated ? onLogout() : onShowAuth()}
             className={cn(
-              "p-1.5 sm:p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition-all duration-300 font-bold text-xs shadow-lg backdrop-blur-md border min-w-8 min-h-8 sm:min-w-10 sm:min-h-10",
+              "p-1.5 sm:p-2 sm:px-4 sm:py-2 rounded-xl flex items-center gap-2 transition-all duration-300 font-bold text-xs shadow-lg backdrop-blur-md border min-w-11 min-h-11 lg:min-w-10 lg:min-h-10",
               isAuthenticated
                 ? "bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border-cyan-500/20"
                 : "bg-white/80 dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-white/10"
@@ -62,7 +62,7 @@ export const UserPageHeader: React.FC<UserPageHeaderProps> = ({
           {/* Settings */}
           <button
             onClick={onShowSettings}
-            className="p-1.5 sm:p-2 rounded-xl bg-white/60 dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors border border-white/20 min-w-8 min-h-8 sm:min-w-10 sm:min-h-10 flex items-center justify-center"
+            className="p-1.5 sm:p-2 rounded-xl bg-white/60 dark:bg-white/5 hover:bg-gray-50 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors border border-white/20 min-w-11 min-h-11 lg:min-w-10 lg:min-h-10 flex items-center justify-center"
           >
             <Settings className="w-4 h-4" />
           </button>

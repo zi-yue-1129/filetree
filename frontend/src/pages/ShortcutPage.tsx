@@ -115,7 +115,7 @@ export const ShortcutPage: React.FC = () => {
               type="button"
               onClick={copyEndpoint}
               aria-label="複製上傳網址"
-              className="px-3 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
+              className="min-w-11 min-h-11 flex items-center justify-center px-3 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
             >
               {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-500 dark:text-white/60" />}
             </button>

@@ -8,9 +8,11 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
-  X
+  X,
+  MoreVertical
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { DropdownMenu } from '../ui/DropdownMenu';
 
 export type Folder = {
   id: string;
@@ -78,6 +80,23 @@ const FolderTreeItem: React.FC<{
     }
   };
 
+  /** Open the "new subfolder" form under this folder and expand it. */
+  const createSubfolder = (): void => {
+    onCreateSubfolder(folder.id);
+    setIsExpanded(true);
+  };
+
+  /** Switch this row to the inline rename input. */
+  const startRename = (): void => {
+    setEditingId(folder.id);
+    setEditName(folder.name);
+  };
+
+  /** Delete this folder (and its content) after confirmation. */
+  const confirmDelete = (): void => {
+    if (confirm(`確定刪除資料夾「${folder.name}」及其所有內容？`)) onDeleteFolder(folder.id);
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -127,7 +146,7 @@ const FolderTreeItem: React.FC<{
     <div className="space-y-1">
       <div 
         className={cn(
-          "group flex items-center gap-2 px-3 py-2.5 lg:py-1.5 rounded-xl text-sm font-medium transition-all relative cursor-pointer border border-transparent",
+          "group flex items-center gap-2 px-3 py-3 lg:py-1.5 rounded-xl text-sm font-medium transition-all relative cursor-pointer border border-transparent",
           isActive 
             ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400" 
             : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5",
@@ -155,19 +174,25 @@ const FolderTreeItem: React.FC<{
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div 
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsExpanded(!isExpanded);
-          }}
-          className="p-0.5 hover:bg-white/20 rounded-md transition-colors"
-        >
-          {hasSubfolders ? (
-            isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />
-          ) : (
+        {hasSubfolders ? (
+          // tap-target: invisible 44px touch area around the small chevron.
+          <div
+            role="button"
+            aria-label={isExpanded ? `收合 ${folder.name}` : `展開 ${folder.name}`}
+            aria-expanded={isExpanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            className="relative tap-target p-0.5 hover:bg-white/20 rounded-md transition-colors"
+          >
+            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          </div>
+        ) : (
+          <div className="p-0.5">
             <div className="w-3.5" />
-          )}
-        </div>
+          </div>
+        )}
         
         <FolderIcon className="w-4 h-4 shrink-0" />
         
@@ -181,45 +206,66 @@ const FolderTreeItem: React.FC<{
               if (e.key === 'Escape') setEditingId(null);
             }}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 text-xs p-1 rounded bg-white dark:bg-black/20 border border-cyan-500 outline-none"
+            className="flex-1 min-w-0 min-h-11 -my-3 lg:min-h-0 lg:my-0 text-xs p-1 rounded bg-white dark:bg-black/20 border border-cyan-500 outline-none"
           />
         ) : (
           <span className="flex-1 truncate">{folder.name}</span>
         )}
 
-        {isAuthenticated && (
+        {isAuthenticated && isDesktop && (
           <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                onCreateSubfolder(folder.id);
-                setIsExpanded(true);
+                createSubfolder();
               }}
               className="p-1 hover:bg-cyan-500/20 text-cyan-500 rounded-md"
               title="新增子資料夾"
             >
               <Plus className="w-3 h-3" />
             </button>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                setEditingId(folder.id);
-                setEditName(folder.name);
+                startRename();
               }}
               className="p-1 hover:bg-white/20 rounded-md"
+              title="重新命名"
             >
               <Edit3 className="w-3 h-3" />
             </button>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm(`確定刪除資料夾「${folder.name}」及其所有內容？`)) onDeleteFolder(folder.id);
+                confirmDelete();
               }}
               className="p-1 hover:bg-red-500/20 text-red-500 rounded-md"
+              title="刪除"
             >
               <Trash2 className="w-3 h-3" />
             </button>
           </div>
+        )}
+        {/* Touch screens have no hover: the hover-revealed buttons above were
+            invisible yet tappable (a tap near the row's right edge could hit
+            rename or delete). Phones get one visible 44px menu button. */}
+        {isAuthenticated && !isDesktop && editingId !== folder.id && (
+          <DropdownMenu
+            trigger={
+              <button
+                type="button"
+                aria-label={`${folder.name} 的操作`}
+                className="min-w-11 min-h-11 -my-3 -mr-2 flex items-center justify-center text-gray-400 hover:text-cyan-600 rounded-lg transition-colors"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            }
+            items={[
+              { label: '新增子資料夾', icon: <Plus className="w-4 h-4 text-cyan-500" />, onClick: createSubfolder },
+              { label: '重新命名', icon: <Edit3 className="w-4 h-4 text-cyan-500" />, onClick: startRename },
+              { label: '刪除', icon: <Trash2 className="w-4 h-4" />, onClick: confirmDelete, variant: 'danger' },
+            ]}
+          />
         )}
       </div>
 
@@ -289,7 +335,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
       <div className="p-4 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
         <button 
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 font-bold text-gray-800 dark:text-gray-200 p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+          className="flex items-center gap-2 font-bold text-gray-800 dark:text-gray-200 p-2.5 -ml-2.5 lg:p-2 lg:-ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
         >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           資料夾
@@ -298,7 +344,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
           {isAuthenticated && (
             <button 
               onClick={() => setIsAdding({ active: true, parentId: null })}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-cyan-600 dark:text-cyan-400 transition-colors"
+              className="min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 flex items-center justify-center p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-cyan-600 dark:text-cyan-400 transition-colors"
               title="新增根資料夾"
             >
               <FolderPlus className="w-4 h-4" />
@@ -307,7 +353,8 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
           {onClose && (
             <button 
               onClick={onClose}
-              className="p-1.5 lg:hidden hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500 transition-colors"
+              aria-label="關閉資料夾面板"
+              className="min-w-11 min-h-11 flex items-center justify-center p-1.5 lg:hidden hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg text-gray-500 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -320,7 +367,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
         <button
           onClick={() => onSelectFolder(null)}
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all mb-2",
+            "w-full flex items-center gap-3 px-3 py-3 lg:py-2 rounded-xl text-sm font-medium transition-all mb-2",
             activeFolderId === null 
               ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400" 
               : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5"
@@ -364,18 +411,18 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              className="w-full text-xs p-2 rounded-lg bg-white dark:bg-black/20 border-none outline-none focus:ring-1 focus:ring-cyan-500"
+              className="w-full min-h-11 lg:min-h-0 text-xs p-2 rounded-lg bg-white dark:bg-black/20 border-none outline-none focus:ring-1 focus:ring-cyan-500"
             />
             <div className="flex gap-1">
               <button 
                 onClick={handleCreate}
-                className="flex-1 py-1 text-[10px] font-bold bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors"
+                className="flex-1 min-h-11 lg:min-h-0 py-1 text-[10px] font-bold bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 transition-colors"
               >
                 新增
               </button>
               <button 
                 onClick={() => setIsAdding({ active: false, parentId: null })}
-                className="px-2 py-1 text-[10px] font-bold bg-gray-200 dark:bg-white/10 rounded-lg"
+                className="min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 px-2 py-1 text-[10px] font-bold bg-gray-200 dark:bg-white/10 rounded-lg"
               >
                 取消
               </button>

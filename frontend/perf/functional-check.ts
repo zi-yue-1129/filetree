@@ -16,7 +16,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium, type Browser, type Page } from 'playwright';
+import { fakeAndroidBridge } from './lib/fakeAndroid.ts';
 import { startStack } from './lib/servers.ts';
+import { formatTapTarget, measureTapTargets, tapTargetProblems } from './lib/tapTargets.ts';
 
 const PASSWORD = 'perf-password-123';
 
@@ -250,6 +252,105 @@ async function checkDashboard(page: Page, baseUrl: string, mobile: boolean, sess
 }
 
 /**
+ * Phone: every visible interactive element of the key screens must offer a
+ * touch target of at least 44x44 CSS px (WCAG 2.5.5, Apple HIG; measured by
+ * hit testing, so invisible expanded hit areas count), be tappable at its
+ * centre (no overlay steals the tap) and not be an invisible hover-only
+ * control (touch screens have no hover).
+ *
+ * Allowlist (WCAG 2.5.5 "inline" exception): links inside running text
+ * (`TapTarget.inlineTextLink`). Nothing else is exempt.
+ *
+ * Also: the "Enter" pill under the note field is a real button on touch
+ * screens (before, it looked like one but ignored taps).
+ *
+ * @param page - Phone page.
+ * @param baseUrl - App URL.
+ */
+async function checkTapTargets(page: Page, baseUrl: string): Promise<void> {
+  const failures: string[] = [];
+  const audit = async (screen: string, scope: string | null = null): Promise<void> => {
+    // Let entrance animations (drawers, dialogs, list items) settle.
+    await page.waitForTimeout(700);
+    for (const target of await measureTapTargets(page, scope)) {
+      if (target.inlineTextLink) continue;
+      if (tapTargetProblems(target).length > 0) failures.push(formatTapTarget(screen, target));
+    }
+  };
+
+  await page.goto(`${baseUrl}/`);
+  await page.getByText('資料傳輸核心').waitFor();
+  await page.getByPlaceholder('輸入內容...').fill('觸控筆記');
+  await page.getByRole('button', { name: '加入筆記' }).click({ timeout: 5_000 }).catch((error: unknown) => {
+    failures.push(`landing | the Enter pill is not a tappable 加入筆記 button (${String(error).split('\n')[0]})`);
+  });
+  await page.getByPlaceholder('輸入內容...').fill('觸控筆記 2');
+  await page.getByPlaceholder('輸入內容...').press('Enter');
+  await page.getByText(/待定筆記 \([12]\)/).waitFor();
+  await audit('landing');
+  await page.getByRole('button', { name: '功能選單' }).click();
+  await audit('menu-drawer', 'aside:has(nav)');
+  await page.goto(`${baseUrl}/`);
+  await page.getByRole('button', { name: '目錄' }).click();
+  await audit('directory-drawer', 'aside:not(:has(nav))');
+  await page.goto(`${baseUrl}/help`);
+  await page.getByRole('heading').first().waitFor();
+  await audit('help');
+
+  await page.goto(`${baseUrl}/perfuser`);
+  await page.locator('.file-item').first().waitFor();
+  await audit('dashboard');
+  await page.locator('.file-item[data-id^="file:"]').first().locator('button:has(svg.lucide-ellipsis-vertical)').click();
+  await page.getByText('QR Code', { exact: true }).waitFor();
+  await audit('file-menu', 'div[style*="z-index: 9999"]');
+  await page.mouse.click(5, 400);
+  await page.locator('div[style*="z-index: 9999"]').waitFor({ state: 'detached' });
+  // A card low on the screen: its menu must stay on-screen (it opened
+  // downwards past the bottom edge, so the last items could not be tapped).
+  const viewport = page.viewportSize();
+  if (viewport === null) throw new Error('page has no viewport size');
+  const menuButtons = page.locator('.file-item[data-id^="file:"] button:has(svg.lucide-ellipsis-vertical)');
+  let lowMenuButton: ReturnType<Page['locator']> | null = null;
+  for (let index = 0; index < (await menuButtons.count()) && lowMenuButton === null; index += 1) {
+    const box = await menuButtons.nth(index).boundingBox();
+    if (box && box.y + box.height / 2 > viewport.height / 2 && box.y + box.height < viewport.height) lowMenuButton = menuButtons.nth(index);
+  }
+  check(lowMenuButton !== null, 'no file card menu button in the lower half of the screen');
+  await lowMenuButton.click();
+  await page.getByText('QR Code', { exact: true }).waitFor();
+  await audit('file-menu-low', 'div[style*="z-index: 9999"]');
+  await page.mouse.click(5, 400);
+  await page.locator('div[style*="z-index: 9999"]').waitFor({ state: 'detached' });
+  // Inline rename of a folder card (narrow card: input + confirm/cancel).
+  const folderCard = page.locator('.folder-card').first();
+  const folderId = await folderCard.getAttribute('data-id');
+  check(folderId !== null, 'folder card has no data-id');
+  await folderCard.locator('button:has(svg.lucide-ellipsis-vertical)').click();
+  await page.getByText('重命名', { exact: true }).click();
+  const renamingCard = page.locator(`.folder-card[data-id="${folderId}"]`);
+  await renamingCard.locator('input').waitFor();
+  await audit('folder-rename', `.folder-card[data-id="${folderId}"]`);
+  await renamingCard.locator('input').press('Escape');
+  await page.getByRole('button', { name: '資料夾', exact: true }).click();
+  await audit('folder-drawer', 'main div.absolute.z-40');
+  await page.goto(`${baseUrl}/perfuser`);
+  await page.locator('.file-item').first().waitFor();
+  await page.locator('header button:has(svg.lucide-settings)').click();
+  await page.getByRole('button', { name: '選擇檔案' }).waitFor();
+  await audit('settings-modal', 'div.fixed.inset-0.z-50');
+  await page.getByRole('button', { name: '選擇檔案' }).click();
+  await page.locator('.file-item[data-id^="file:"]').first().locator('button').first().click();
+  await audit('selection-mode');
+  await page.goto(`${baseUrl}/perfuser`);
+  await page.locator('.file-item').first().waitFor();
+  await page.getByRole('button', { name: /筆記 \/ 連結/ }).click();
+  await page.locator('[data-id^="url:"]').first().waitFor();
+  await audit('urls-tab');
+
+  check(failures.length === 0, `${failures.length} touch targets too small, covered or invisible:\n  ${failures.join('\n  ')}`);
+}
+
+/**
  * List the perf user's file names through the API.
  *
  * @param baseUrl - App URL.
@@ -346,88 +447,6 @@ async function readBuildSiteOrigin(baseUrl: string): Promise<string> {
     throw new Error('The build has no og:url: build with VITE_SITE_URL=https://<site> for the native link checks');
   }
   return new URL(match[1]).origin;
-}
-
-/** Options of the simulated Capacitor Android bridge. */
-interface FakeAndroidOptions {
-  /** URL returned by `App.getLaunchUrl()` (the App Link that started the app), or null. */
-  launchUrl: string | null;
-}
-
-/**
- * Install a fake Capacitor Android bridge before any app script runs:
- * `Capacitor.getPlatform()` reports `android`, plugin calls resolve with
- * canned values (unknown ones reject as on a device without the plugin) and
- * `window.__fnFireNativeEvent(plugin, event, data)` emits a plugin event.
- * The clipboard is replaced by a recorder (`window.__fnClipboard`).
- *
- * @param options - Bridge options (serialised into the page).
- */
-function fakeAndroidBridge(options: FakeAndroidOptions): void {
-  type Callback = (data: unknown, error?: unknown) => void;
-  const listeners = new Map<string, Callback[]>();
-  const pluginMethods: Record<string, string[]> = {
-    App: ['getLaunchUrl', 'getInfo', 'getState', 'removeListener', 'removeAllListeners'],
-    Preferences: ['get', 'set', 'remove', 'keys', 'clear'],
-    CapacitorUpdater: ['notifyAppReady', 'list', 'current'],
-    FileNexusNative: ['getConfiguration', 'getSharedItems', 'getNativeInfo', 'getUploads', 'removeListener', 'removeAllListeners'],
-    Device: ['getInfo', 'getId'],
-  };
-  const responses: Record<string, unknown> = {
-    // Capacitor resolves `{}` when the app was not started by a link.
-    'App.getLaunchUrl': options.launchUrl === null ? {} : { url: options.launchUrl },
-    'App.getInfo': { version: '0.0.1', build: '1', id: 'cc.spkuan.filenexus', name: 'FileNexus' },
-    'Preferences.get': { value: null },
-    'CapacitorUpdater.list': { bundles: [] },
-    'FileNexusNative.getConfiguration': { serverUrl: null, deviceToken: null, deviceId: null, deviceName: null },
-    'FileNexusNative.getSharedItems': { items: [] },
-    'FileNexusNative.getUploads': { uploads: [] },
-  };
-  let nextCallbackId = 0;
-  const win = window as unknown as Record<string, unknown>;
-  win.androidBridge = { postMessage: (): void => undefined };
-  win.Capacitor = {
-    PluginHeaders: Object.entries(pluginMethods).map(([name, methods]) => ({
-      name,
-      methods: [
-        ...methods.map((method) => ({ name: method, rtype: 'promise' })),
-        { name: 'addListener', rtype: 'callback' },
-      ],
-    })),
-    nativePromise: async (plugin: string, method: string): Promise<unknown> => {
-      const key = `${plugin}.${method}`;
-      return key in responses ? responses[key] : {};
-    },
-    nativeCallback: (plugin: string, method: string, callOptions: { eventName?: string }, callback: Callback): string => {
-      if (method !== 'addListener' || !callOptions.eventName) {
-        throw new Error(`fake bridge: unexpected callback method ${plugin}.${method}`);
-      }
-      const key = `${plugin}:${callOptions.eventName}`;
-      listeners.set(key, [...(listeners.get(key) ?? []), callback]);
-      nextCallbackId += 1;
-      return String(nextCallbackId);
-    },
-  };
-  win.__fnFireNativeEvent = (plugin: string, eventName: string, data: unknown): number => {
-    const callbacks = listeners.get(`${plugin}:${eventName}`) ?? [];
-    callbacks.forEach((callback) => callback(data));
-    return callbacks.length;
-  };
-  const clipboardTexts: string[] = [];
-  win.__fnClipboard = clipboardTexts;
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: {
-      writeText: async (text: string): Promise<void> => {
-        clipboardTexts.push(text);
-      },
-      write: async (items: ClipboardItem[]): Promise<void> => {
-        for (const item of items) {
-          clipboardTexts.push(await (await item.getType('text/plain')).text());
-        }
-      },
-    },
-  });
 }
 
 /** A page in the simulated Android app plus helpers to inspect it. */
@@ -607,6 +626,7 @@ async function main(): Promise<void> {
         await checkNoBrandFooter(page);
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);
+        if (mobile) await checkTapTargets(page, stack.baseUrl);
         if (!mobile && effects === 'full') {
           await page.goto(`${stack.baseUrl}/`);
           await checkEffectsToggle(page);

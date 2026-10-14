@@ -11,6 +11,20 @@ export interface DropdownItem {
   hidden?: boolean;
 }
 
+/** Viewport position of the trigger, used to place the menu. */
+interface MenuCoords {
+  /** Trigger bottom edge (menu top when opening downwards). */
+  top: number;
+  /** Trigger top edge (menu bottom when opening upwards). */
+  bottom: number;
+  /** Trigger left edge. */
+  left: number;
+  /** Trigger width. */
+  width: number;
+  /** Open above the trigger (trigger in the lower half of the viewport). */
+  openUp: boolean;
+}
+
 interface DropdownMenuProps {
   trigger: React.ReactNode;
   items: DropdownItem[];
@@ -26,15 +40,20 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  const [coords, setCoords] = useState<MenuCoords>({ top: 0, bottom: 0, left: 0, width: 0, openUp: false });
 
   const updateCoords = () => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       setCoords({
         top: rect.bottom,
+        bottom: rect.top,
         left: rect.left,
-        width: rect.width
+        width: rect.width,
+        // Triggers in the lower half open the menu upwards: opening down from
+        // a card near the bottom of a phone screen put the last items
+        // (e.g. 刪除) off-screen, where they could not be tapped.
+        openUp: rect.top + rect.height / 2 > window.innerHeight / 2,
       });
     }
   };
@@ -76,12 +95,15 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
     <AnimatePresence>
       {isOpen && (
         <m.div
-          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+          initial={{ opacity: 0, scale: 0.95, y: coords.openUp ? 10 : -10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+          exit={{ opacity: 0, scale: 0.95, y: coords.openUp ? 10 : -10 }}
           style={{
             position: 'fixed',
-            top: coords.top + 8,
+            ...(coords.openUp
+              ? { bottom: window.innerHeight - coords.bottom + 8 }
+              : { top: coords.top + 8 }
+            ),
             ...(align === 'right' 
               ? { right: window.innerWidth - (coords.left + coords.width) } 
               : { left: coords.left }
@@ -115,7 +137,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
                     onTouchStart={(e) => e.stopPropagation()}
                     onTouchEnd={(e) => e.stopPropagation()}
                     className={cn(
-                      "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all text-left",
+                      "flex items-center gap-3 w-full px-3 py-3 lg:py-2.5 rounded-xl transition-all text-left",
                       item.variant === 'danger' 
                         ? "text-red-500 hover:bg-red-500/10" 
                         : "text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10"

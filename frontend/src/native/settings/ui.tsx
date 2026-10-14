@@ -47,7 +47,8 @@ export const ActionButton: React.FC<ActionButtonProps> = ({ variant = 'secondary
     type="button"
     {...rest}
     className={cn(
-      'px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+      // min-h-11: 44px touch target (WCAG 2.5.5).
+      'min-h-11 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
       'focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan',
       variant === 'primary' && 'bg-quantum-cyan/20 text-cyan-700 dark:text-quantum-cyan border border-quantum-cyan/40 hover:bg-quantum-cyan/30',
       variant === 'secondary' && 'border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white/70 hover:bg-gray-100 dark:hover:bg-white/5',
@@ -76,7 +77,7 @@ export const TextField: React.FC<TextFieldProps> = ({ label, id, className, ...r
       id={id}
       {...rest}
       className={cn(
-        'w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10',
+        'w-full min-h-11 px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10',
         'text-sm text-gray-900 dark:text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan',
         className,
       )}
@@ -103,7 +104,7 @@ interface ToggleProps {
  * @returns The toggle row.
  */
 export const Toggle: React.FC<ToggleProps> = ({ label, checked, disabled, onChange }) => (
-  <label className={cn('flex items-center justify-between gap-4 py-1', disabled && 'opacity-50')}>
+  <label className={cn('flex items-center justify-between gap-4 py-1 min-h-11', disabled && 'opacity-50')}>
     <span className="text-sm text-gray-700 dark:text-white/70">{label}</span>
     <input
       type="checkbox"

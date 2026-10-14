@@ -245,7 +245,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
               isFullscreen ? "w-[98vw] h-[95vh]" : "w-full max-w-5xl h-[80vh]"
             )}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur-md shrink-0">
+            <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-white/10 bg-white/5 backdrop-blur-md shrink-0">
               <div className="flex items-center gap-4 min-w-0">
                 <div className="p-2 bg-quantum-cyan/10 rounded-lg">
                   <FileText className="w-5 h-5 text-quantum-cyan" />
@@ -263,7 +263,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
                 <a
                   href={file.url}
                   download
-                  className="p-2 text-white/40 hover:text-quantum-cyan hover:bg-quantum-cyan/10 rounded-lg transition-colors"
+                  className="p-3 lg:p-2 text-white/40 hover:text-quantum-cyan hover:bg-quantum-cyan/10 rounded-lg transition-colors"
                   title="下載檔案"
                 >
                   <Download className="w-5 h-5" />
@@ -275,10 +275,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
                 >
                   {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                 </button>
-                <div className="w-px h-6 bg-white/10 mx-2" />
+                <div className="w-px h-6 bg-white/10 mx-1 sm:mx-2" />
                 <button
                   onClick={onClose}
-                  className="p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  aria-label="關閉預覽"
+                  className="p-2.5 lg:p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                 >
                   <X className="w-6 h-6" />
                 </button>

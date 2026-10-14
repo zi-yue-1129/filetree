@@ -405,16 +405,18 @@ export const UrlView: React.FC<UrlViewProps> = ({
 
                         {!isLocked && (
                           <div className={cn(
-                            "transition-opacity z-30 pointer-events-auto absolute top-1.5 left-1.5",
-                            (isSelected || isSelectionMode) 
-                              ? "opacity-100" 
-                              : "opacity-0 lg:group-hover:opacity-100"
+                            "transition-opacity z-30 absolute top-1.5 left-1.5",
+                            // Hidden checkboxes must not catch taps: on touch screens
+                            // (no hover) they were invisible yet selected the note.
+                            (isSelected || isSelectionMode)
+                              ? "opacity-100 pointer-events-auto"
+                              : "opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
                           )}>
                             <button
                               onClick={(e) => { e.stopPropagation(); onToggleSelect('url', url.url); }}
                               onMouseDown={(e) => e.stopPropagation()}
                                onMouseUp={(e) => e.stopPropagation()}
-                              className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors bg-white/50 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center"
+                              className="relative tap-target p-1.5 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors bg-white/50 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center"
                             >
                               {isSelected ? <CheckSquare className="w-5 h-5 text-violet-600" /> : <Square className="w-5 h-5 text-gray-400" />}
                             </button>
@@ -525,7 +527,7 @@ export const UrlView: React.FC<UrlViewProps> = ({
                                <DropdownMenu
                                  trigger={
                                    <button
-                                     className="p-2 sm:p-1.5 rounded-lg backdrop-blur-sm transition-all shadow-sm bg-white/80 dark:bg-black/50 text-gray-500 hover:text-cyan-500 min-w-10 min-h-10 flex items-center justify-center"
+                                     className="p-2 sm:p-1.5 rounded-lg backdrop-blur-sm transition-all shadow-sm bg-white/80 dark:bg-black/50 text-gray-500 hover:text-cyan-500 min-w-11 min-h-11 flex items-center justify-center"
                                      onMouseDown={(e) => e.stopPropagation()}
                                      onMouseUp={(e) => e.stopPropagation()}
                                      onTouchStart={(e) => e.stopPropagation()}
@@ -624,10 +626,11 @@ export const UrlView: React.FC<UrlViewProps> = ({
                       <div className="flex items-center gap-3 shrink-0 pointer-events-none">
                         {!isLocked && (
                           <div className={cn(
-                            "transition-opacity z-30 pointer-events-auto",
-                            (isSelected || isSelectionMode) 
-                              ? "opacity-100" 
-                              : "opacity-0 lg:group-hover:opacity-100"
+                            "transition-opacity z-30",
+                            // Hidden checkboxes must not catch taps (no hover on touch screens).
+                            (isSelected || isSelectionMode)
+                              ? "opacity-100 pointer-events-auto"
+                              : "opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
                           )}>
                             <button
                               onClick={(e) => { e.stopPropagation(); onToggleSelect('url', url.url); }}
@@ -761,7 +764,7 @@ export const UrlView: React.FC<UrlViewProps> = ({
                              <DropdownMenu
                                trigger={
                                  <button 
-                                   className="p-2 text-gray-400 hover:text-violet-500 rounded-lg transition-colors"
+                                   className="min-w-11 min-h-11 flex items-center justify-center p-2 text-gray-400 hover:text-violet-500 rounded-lg transition-colors"
                                    onMouseDown={(e) => e.stopPropagation()}
                                    onMouseUp={(e) => e.stopPropagation()}
                                    onTouchStart={(e) => e.stopPropagation()}
