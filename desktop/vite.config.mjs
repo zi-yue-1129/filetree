@@ -7,7 +7,8 @@ const { mergeConfig } = await import(pathToFileURL(requireFrontend.resolve('vite
 // Vite loads this TypeScript import while bundling the configuration.
 const { default: sharedConfig } = await import('../frontend/vite.config.ts');
 
-export default mergeConfig(sharedConfig, {
+/** Desktop-only overrides merged onto the shared web configuration. */
+const desktopOverrides = {
   root: fileURLToPath(new URL('../frontend/', import.meta.url)),
   plugins: [{
     name: 'filenexus-desktop-origin',
@@ -25,4 +26,17 @@ export default mergeConfig(sharedConfig, {
         "(('__TAURI_INTERNALS__' in window) && (window as Window & { __FILENEXUS_SERVER_URL__?: string }).__FILENEXUS_SERVER_URL__) || " + original);
     },
   }],
-});
+};
+
+/**
+ * Resolve the shared config (an object or a `defineConfig` callback) for the
+ * current command/mode, then apply the desktop overrides.
+ * @param {import('vite').ConfigEnv} configEnv Vite command and mode.
+ * @returns {Promise<import('vite').UserConfig>} Merged configuration.
+ */
+export default async function desktopConfig(configEnv) {
+  const resolvedShared = typeof sharedConfig === 'function'
+    ? await sharedConfig(configEnv)
+    : sharedConfig;
+  return mergeConfig(resolvedShared, desktopOverrides);
+}
