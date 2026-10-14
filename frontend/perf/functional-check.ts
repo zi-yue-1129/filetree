@@ -87,6 +87,38 @@ async function checkLanding(page: Page, baseUrl: string, workDir: string): Promi
 }
 
 /**
+ * Phone: the first visit to a user page through the 其他人 drawer must close
+ * the drawer completely. Regression for the "fogged page on first open" bug:
+ * the UserPage chunk was not loaded yet, so the navigation suspended the
+ * Suspense boundary around the whole layout while the drawer backdrop played
+ * its exit animation; the hidden backdrop never finished exiting and stayed
+ * over the page (blurred, dimmed, swallowing every tap).
+ *
+ * Must run on a fresh page that has not loaded the UserPage chunk yet.
+ *
+ * @param page - Phone page.
+ * @param baseUrl - App URL.
+ */
+async function checkDirectoryFirstNavigation(page: Page, baseUrl: string): Promise<void> {
+  await page.goto(`${baseUrl}/`);
+  await page.getByText('資料傳輸核心').waitFor();
+  await page.getByRole('button', { name: '目錄' }).click();
+  await page.locator('aside').getByText('perfuser').click();
+  await page.locator('.file-item').first().waitFor();
+  const backdrop = page.locator('div.fixed.inset-0.z-40');
+  // Exit animations take ~0.3 s; give them generous time before judging.
+  await backdrop.waitFor({ state: 'detached', timeout: 5_000 }).catch((error: unknown) => {
+    throw new Error(`CHECK FAILED: drawer backdrop still covers the page after navigating (${String(error)})`);
+  });
+  // A tap in the middle of the page must reach the dashboard, not a backdrop.
+  const hitInsideMain = await page.evaluate(() => {
+    const hit = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+    return hit !== null && hit.closest('main') !== null;
+  });
+  check(hitInsideMain, 'a tap in the page centre must reach the dashboard');
+}
+
+/**
  * Dashboard: folder navigation, selection, rename, QR dialog.
  *
  * @param page - Page.
@@ -292,6 +324,8 @@ async function main(): Promise<void> {
         const page = await openPage(browser, mobile, effects, session);
         const requestedUrls: string[] = [];
         page.on('request', (request) => requestedUrls.push(request.url()));
+        // First, while the UserPage chunk is still unloaded (fresh page).
+        if (mobile) await checkDirectoryFirstNavigation(page, stack.baseUrl);
         await checkLanding(page, stack.baseUrl, workDir);
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);

@@ -45,6 +45,19 @@ interface UserData {
   error?: string;
 }
 
+/**
+ * Placeholder shown in the main pane while page data or a page chunk loads.
+ *
+ * @returns The loading indicator.
+ */
+const PageLoadingIndicator: React.FC = () => (
+  <div className="flex-1 flex items-center justify-center">
+    <div className="text-quantum-cyan animate-pulse tracking-[0.4em] font-bold text-xs uppercase">
+      正在載入系統...
+    </div>
+  </div>
+);
+
 // Main content wrapper that handles data fetching based on route
 const MainContent: React.FC<{
   users: Array<{ username: string; folder: string }>;
@@ -85,13 +98,7 @@ const MainContent: React.FC<{
   }, [username, token]);
 
   if (loading || userLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-quantum-cyan animate-pulse tracking-[0.4em] font-bold text-xs uppercase">
-          正在載入系統...
-        </div>
-      </div>
-    );
+    return <PageLoadingIndicator />;
   }
 
   // Home page - show upload center
@@ -202,12 +209,18 @@ const MainLayout: React.FC<{
             ? "overflow-hidden" 
             : "custom-scrollbar overflow-y-auto"
         )}>
-          <MainContent 
-            users={users} 
-            config={config} 
-            loading={loading} 
-            onOpenDirectory={() => setDirectoryOpen(true)}
-          />
+          {/* Lazy pages suspend only this boundary. With the outer boundary in
+              AppContent the first visit to a page chunk hid the whole layout,
+              including the drawers mid-exit-animation: their framer-motion
+              backdrop never finished exiting and fogged the page. */}
+          <React.Suspense fallback={<PageLoadingIndicator />}>
+            <MainContent
+              users={users}
+              config={config}
+              loading={loading}
+              onOpenDirectory={() => setDirectoryOpen(true)}
+            />
+          </React.Suspense>
         </main>
 
         {/* Right Sidebar - Public Directory */}
