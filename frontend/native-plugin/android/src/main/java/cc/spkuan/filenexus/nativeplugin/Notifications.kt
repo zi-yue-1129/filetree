@@ -69,9 +69,10 @@ object Notifications {
      *
      * @param title Title line.
      * @param text Detail line.
-     * @param progressPercent 0..100, or `null` for indeterminate.
+     * @param bar Progress bar arguments, or `null` for an indeterminate bar
+     * (preparing, size unknown).
      */
-    fun progress(context: Context, title: String, text: String, progressPercent: Int?): Notification {
+    fun progress(context: Context, title: String, text: String, bar: UploadProgress.Bar?): Notification {
         ensureChannels(context)
         return NotificationCompat.Builder(context, CHANNEL_UPLOADS)
             .setSmallIcon(R.drawable.ic_stat_filenexus)
@@ -81,7 +82,8 @@ object Notifications {
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(openAppIntent(context))
-            .setProgress(100, progressPercent ?: 0, progressPercent == null)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setProgress(bar?.max ?: 0, bar?.value ?: 0, bar?.indeterminate ?: true)
             .build()
     }
 
