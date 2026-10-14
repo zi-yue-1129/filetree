@@ -579,16 +579,19 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
         </div>
       )}
 
-      <div className="flex items-center gap-3">
+      {/* Phones stack the icon (sharing its row with the absolute ⋮ button)
+          above the name, so the name gets the full card width instead of
+          being squeezed between the icon and the button. */}
+      <div className="flex flex-col items-start gap-2 w-full lg:flex-row lg:items-center lg:gap-3">
         {/* Phones hide the icon while renaming so the input and two 44px
             buttons fit the narrow card. */}
         <div className={cn(
-          "p-2 bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 rounded-xl shrink-0",
+          "p-1.5 lg:p-2 bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 rounded-lg lg:rounded-xl shrink-0",
           renamingFolderId === folder.id && "hidden lg:block"
         )}>
-          <FolderIcon className="w-5 h-5" />
+          <FolderIcon className="w-4 h-4 lg:w-5 lg:h-5" />
         </div>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 w-full lg:w-auto lg:flex-1">
           {renamingFolderId === folder.id ? (
             // Phones: input on its own row and 44px confirm/cancel buttons below it.
             <div className="flex flex-wrap lg:flex-nowrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -633,12 +636,12 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
               </button>
             </div>
           ) : (
-            <h4 className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate group-hover:text-cyan-600 transition-colors">
+            <h4 data-folder-name className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate group-hover:text-cyan-600 transition-colors">
               {folder.name}
             </h4>
           )}
         </div>
-        
+
         {/* Desktop hover actions */}
             {/* Desktop Hover Actions (Overlay) */}
             {!renamingFolderId && (
