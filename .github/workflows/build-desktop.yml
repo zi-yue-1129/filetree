@@ -47,6 +47,8 @@ jobs:
       DESKTOP_VERSION: ${{ inputs.version || '0.1.0' }}
       DESKTOP_RELEASE: ${{ inputs.version != '' }}
       CONFIGURED_API_URL: ${{ vars.VITE_API_BASE_URL }}
+      # Public web origin: share/folder links copied in the app point here.
+      VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
       TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
       npm_config_cache: ${{ github.workspace }}/.npm-cache
     steps:
