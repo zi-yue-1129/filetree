@@ -352,13 +352,6 @@ const AppContent: React.FC = () => {
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </React.Suspense>
-
-        {/* Fixed only on large screens: on phones a fixed footer rides above the
-            on-screen keyboard and covers form fields, so it flows after the content. */}
-        <footer className="text-center py-4 lg:py-2 flex items-center justify-center gap-2 relative lg:fixed lg:bottom-2 w-full z-10 pointer-events-none">
-          <span className="filenexus-brand text-[0.625rem]! tracking-[0.3em] uppercase">FileNexus</span>
-          <span className="text-gray-400 dark:text-white/20 text-[0.625rem] font-bold tracking-[0.3em] uppercase">- Secure File Bridge Hub</span>
-        </footer>
       </div>
     </BrowserRouter>
   );

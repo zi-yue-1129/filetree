@@ -116,22 +116,14 @@ async function checkExclusiveDrawers(page: Page, baseUrl: string): Promise<void>
 }
 
 /**
- * The brand footer must not float over content on phones. With the on-screen
- * keyboard open the visual viewport shrinks and a `position: fixed` footer
- * sat right above the keyboard, covering the form field being typed into.
+ * The "FileNexus - Secure File Bridge Hub" footer was removed: on phones it
+ * covered form fields above the on-screen keyboard and added nothing.
  *
  * @param page - Page on the landing route.
- * @param mobile - Whether the page uses the phone viewport.
  */
-async function checkFooterPlacement(page: Page, mobile: boolean): Promise<void> {
-  const footer = page.locator('footer', { hasText: 'Secure File Bridge Hub' });
-  const style = await footer.evaluate((element: Element) => {
-    const computed = getComputedStyle(element);
-    return { position: computed.position, pointerEvents: computed.pointerEvents };
-  });
-  const expectedPosition = mobile ? 'relative' : 'fixed';
-  check(style.position === expectedPosition, `footer must be ${expectedPosition} on ${mobile ? 'phone' : 'desktop'}, got ${style.position}`);
-  check(style.pointerEvents === 'none', `footer must not intercept taps, got pointer-events ${style.pointerEvents}`);
+async function checkNoBrandFooter(page: Page): Promise<void> {
+  const footerCount = await page.getByText('Secure File Bridge Hub').count();
+  check(footerCount === 0, `brand footer must be removed, found ${footerCount}`);
 }
 
 /**
@@ -612,7 +604,7 @@ async function main(): Promise<void> {
         if (mobile) await checkDirectoryFirstNavigation(page, stack.baseUrl);
         if (mobile) await checkExclusiveDrawers(page, stack.baseUrl);
         await checkLanding(page, stack.baseUrl, workDir);
-        await checkFooterPlacement(page, mobile);
+        await checkNoBrandFooter(page);
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);
         if (!mobile && effects === 'full') {
