@@ -63,10 +63,15 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          # Public web origin: share/folder links copied in the apps point here.
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
           if [[ -z "$VITE_API_BASE_URL" ]]; then
             echo "::error::Repository variable VITE_API_BASE_URL is not set"; exit 1
+          fi
+          if [[ -z "$VITE_SITE_URL" ]]; then
+            echo "::error::Repository variable VITE_SITE_URL is not set (apps could not build share links)"; exit 1
           fi
           npm run build
 

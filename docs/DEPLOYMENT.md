@@ -89,6 +89,21 @@ App 更新用的 `android.json`、`web-bundle.json`、`latest.json` 等是 GitHu
 部署後可用 [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
 或在 Discord 貼上網址確認,必要時在除錯工具按「重新抓取」清除舊快取。
 
+### Android App Links (`/.well-known/assetlinks.json`)
+
+`frontend/public/.well-known/assetlinks.json` 由 Pages 以靜態檔提供(副檔名
+`.json` 由 Pages 自動回 `Content-Type: application/json`;實體檔案優先於 SPA
+fallback,不會被改寫成 `index.html`)。Android 安裝 App 時會向
+`https://<VITE_SITE_URL 的網域>/.well-known/assetlinks.json` 驗證,通過後
+`https://99.spkuan.cc/...` 連結會直接在 App 開啟。部署後可確認:
+
+```bash
+curl -sI https://99.spkuan.cc/.well-known/assetlinks.json   # 200, application/json
+```
+
+GitHub Actions 的 App 建置也需要儲存庫變數 `VITE_SITE_URL`(與 Pages 相同的值),
+App 內複製的分享連結才會指向網站而不是 App 內部的 `localhost`。
+
 ### iPhone 捷徑 (`/shortcut`)
 
 頁面會顯示 `VITE_API_BASE_URL` 對應的上傳網址與建立步驟。自己建好一次捷徑後,

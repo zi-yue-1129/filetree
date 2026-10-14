@@ -26,6 +26,7 @@ import { useAuth } from './hooks/useAuth';
 import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
 import { isMobileNative } from './native';
+import { AppLinkNavigator } from './native/AppLinkNavigator';
 
 interface UserData {
   users?: Array<{ username: string; folder: string }>;
@@ -287,9 +288,13 @@ const AppContent: React.FC = () => {
   return (
     <BrowserRouter>
       {isMobileNative() && (
-        <React.Suspense fallback={null}>
-          <NativeBootstrap />
-        </React.Suspense>
+        <>
+          {/* Eager: App Links must be routed even before lazy chunks load. */}
+          <AppLinkNavigator />
+          <React.Suspense fallback={null}>
+            <NativeBootstrap />
+          </React.Suspense>
+        </>
       )}
       <div className="min-h-screen relative text-gray-900 dark:text-white/90 selection:bg-quantum-cyan/30">
         {/* Background Layer - Dynamic based on theme */}

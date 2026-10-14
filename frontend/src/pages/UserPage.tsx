@@ -5,6 +5,7 @@ import { SecurityInitializationModal } from '../components/SecurityInitializatio
 import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { apiRequest, apiPostForm, apiUrl, API_ORIGIN } from '../services/api';
+import { publicSiteOrigin, publicSiteUrl, PublicSiteOriginError } from '../services/publicSite';
 import { FilePreviewModal } from '../components/FilePreviewModal';
 import { FileView } from '../components/dashboard/FileView';
 import { UrlView } from '../components/dashboard/UrlView';
@@ -562,11 +563,13 @@ const UserPageView: React.FC<UserPageProps> = ({
 
   /** Mint a per-file share token and return its public share-page URL. */
   const createShareUrl = async (filename: string): Promise<string> => {
+    // Resolve the public origin first: if it is unknown no token is minted.
+    const siteOrigin = publicSiteOrigin();
     const formData = new FormData();
     if (token) formData.append('token', token);
     else if (password) formData.append('password', password);
     const result = await apiPostForm(`/share/${dashboardData.user?.username}/${encodeURIComponent(filename)}`, formData);
-    return `${window.location.origin}/share/${result.token}`;
+    return `${siteOrigin}/share/${result.token}`;
   };
 
   /** Show a QR code for a share link (never a session-token download URL). */
@@ -647,7 +650,8 @@ const UserPageView: React.FC<UserPageProps> = ({
       }
     } catch (err) {
       console.error(err);
-      alert('分享功能發生錯誤，請稍後再試。');
+      // A native build without a public site URL must say so, not fail vaguely.
+      alert(err instanceof PublicSiteOriginError ? err.message : '分享功能發生錯誤，請稍後再試。');
     }
   };
 
@@ -697,14 +701,27 @@ const UserPageView: React.FC<UserPageProps> = ({
   const onDeleteFolder = useStableCallback(handleDeleteFolder);
   const onFileFolderClick = useStableCallback((id: string) => handleFolderNavigation('file', id));
   const onUrlFolderClick = useStableCallback((id: string) => handleFolderNavigation('url', id));
+  /** Public link to a folder of this user page (for copy and QR). */
+  const folderLink = (tab: 'file' | 'url', folderId: string): string =>
+    publicSiteUrl(`/${dashboardData.user?.username}?tab=${tab}&folder=${folderId}`);
   const onShareFolderLink = useStableCallback((tab: 'file' | 'url', folderId: string) => {
-    const url = `${window.location.origin}/${dashboardData.user?.username}?tab=${tab}&folder=${folderId}`;
+    let url: string;
+    try {
+      url = folderLink(tab, folderId);
+    } catch (err: unknown) {
+      alert((err as Error).message);
+      return;
+    }
     navigator.clipboard?.writeText(url).then(() => alert('資料夾連結已複製！'));
   });
   const onShareFileFolder = useCallback((folderId: string) => onShareFolderLink('file', folderId), [onShareFolderLink]);
   const onShareUrlFolder = useCallback((folderId: string) => onShareFolderLink('url', folderId), [onShareFolderLink]);
   const onQrCodeFolderLink = useStableCallback((tab: 'file' | 'url', folderId: string) => {
-    setQrUrl(`${window.location.origin}/${dashboardData.user?.username}?tab=${tab}&folder=${folderId}`);
+    try {
+      setQrUrl(folderLink(tab, folderId));
+    } catch (err: unknown) {
+      alert((err as Error).message);
+    }
   });
   const onQrCodeFileFolder = useCallback((folderId: string) => onQrCodeFolderLink('file', folderId), [onQrCodeFolderLink]);
   const onQrCodeUrlFolder = useCallback((folderId: string) => onQrCodeFolderLink('url', folderId), [onQrCodeFolderLink]);
