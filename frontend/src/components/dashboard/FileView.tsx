@@ -11,6 +11,8 @@ import type { Folder } from './FolderSidebar';
 import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
 import { FileItem, type FileItemData } from './FileItem';
 import { FolderItem } from './FolderItem';
+import { MobileTopSpacer } from '../user-page/MobileTopSpacer';
+import { DASHBOARD_SCROLLER_ATTRIBUTE } from '../../hooks/useHideOnScroll';
 
 // Stable Virtuoso List components to prevent remounting on re-render
 const GridListContainer = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
@@ -48,6 +50,7 @@ const CustomScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
     <div
       ref={ref}
       {...props}
+      {...{ [DASHBOARD_SCROLLER_ATTRIBUTE]: '' }}
       style={style}
       className="custom-scrollbar"
     >
@@ -66,13 +69,20 @@ const INITIAL_RENDERED_FILES = 12;
 /** Data handed to the Virtuoso header through its `context` prop. */
 interface FileListContext {
   folders: React.ReactNode;
+  /** Phone: reserve room for the floating chrome above the first row. */
+  topSpacer: boolean;
 }
 
 /**
  * Folder cards rendered as the virtual list's header, so they scroll together
  * with the files (a long folder grid used to push the list out of view).
  */
-const FoldersHeader: React.FC<{ context?: FileListContext }> = ({ context }) => <>{context?.folders}</>;
+const FoldersHeader: React.FC<{ context?: FileListContext }> = ({ context }) => (
+  <>
+    {context?.topSpacer && <MobileTopSpacer />}
+    {context?.folders}
+  </>
+);
 
 interface FileViewProps {
   files: FileItemData[];
@@ -105,6 +115,8 @@ interface FileViewProps {
   onDownloadFolder?: (folderId: string) => void;
   onToggleFolderLock?: (type: 'folder', id: string, currentStatus: boolean) => void;
   isDesktop?: boolean;
+  /** Phone: start the scroll content below the floating chrome. */
+  mobileTopInset?: boolean;
 }
 
 export const FileView: React.FC<FileViewProps> = ({
@@ -137,7 +149,8 @@ export const FileView: React.FC<FileViewProps> = ({
   onQrCodeFolder,
   onDownloadFolder,
   onToggleFolderLock,
-  isDesktop = true
+  isDesktop = true,
+  mobileTopInset = false
 }) => {
   const [renamingFile, setRenamingFile] = React.useState<string | null>(null);
   const [newName, setNewName] = React.useState<string>('');
@@ -291,7 +304,7 @@ export const FileView: React.FC<FileViewProps> = ({
       </div>
     </div>
   ) : null;
-  const listContext: FileListContext = { folders: foldersNode };
+  const listContext: FileListContext = { folders: foldersNode, topSpacer: mobileTopInset };
 
   const renderFileItem = (_index: number, file: FileItemData) => {
     const isRenamingThis = renamingFile === file.name;
@@ -328,7 +341,10 @@ export const FileView: React.FC<FileViewProps> = ({
   };
 
   return (
-    <section className="flex-1 min-h-0 flex flex-col bg-white/60 dark:bg-space-black/40 backdrop-blur-xl rounded-4xl border border-white/40 dark:border-white/5 shadow-2xl overflow-hidden relative">
+    // Phones: full-bleed pane (no card frame) under the floating chrome;
+    // `isolate` keeps raised cards (z-index) below that chrome even when
+    // low-power modes drop the backdrop-filter that used to isolate them.
+    <section className="flex-1 min-h-0 flex flex-col bg-white/60 dark:bg-space-black/40 backdrop-blur-xl lg:rounded-4xl border-0 lg:border border-white/40 dark:border-white/5 lg:shadow-2xl overflow-hidden relative isolate">
       <div className="absolute inset-0 bg-linear-to-b from-white/20 to-transparent dark:from-white/5 dark:to-transparent pointer-events-none" />
 
       {/* Scrollable File Area */}
@@ -339,7 +355,7 @@ export const FileView: React.FC<FileViewProps> = ({
         onPointerUp={handlePointerUp}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-        className="flex-1 min-h-0 min-w-0 flex flex-col p-2 sm:p-4 custom-scrollbar touch-pan-y relative overflow-hidden"
+        className="flex-1 min-h-0 min-w-0 flex flex-col px-2 pb-2 sm:px-4 sm:pb-4 lg:pt-4 custom-scrollbar touch-pan-y relative overflow-hidden"
       >
         {selectionBox && createPortal(
           <div
@@ -356,13 +372,17 @@ export const FileView: React.FC<FileViewProps> = ({
         
         {(!files || files.length === 0) && currentSubfolders.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-white/20">
+            {mobileTopInset && <MobileTopSpacer />}
             <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center mb-4">
               <FileText className="w-8 h-8 opacity-50" />
             </div>
             <p className="text-sm font-medium">尚無檔案</p>
           </div>
         ) : (!files || files.length === 0) ? (
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">{foldersNode}</div>
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar" {...{ [DASHBOARD_SCROLLER_ATTRIBUTE]: '' }}>
+            {mobileTopInset && <MobileTopSpacer />}
+            {foldersNode}
+          </div>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col">
             {viewMode === 'grid' ? (

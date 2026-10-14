@@ -124,6 +124,19 @@ async function auditPublicScreens(page: Page, baseUrl: string, workDir: string, 
 }
 
 /**
+ * Scroll the phone dashboard pane back to the top (the breadcrumb row hides
+ * while scrolled down) and let the chrome transition finish.
+ *
+ * @param page - Phone page on a user dashboard.
+ */
+async function scrollDashboardToTop(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const scroller of document.querySelectorAll('[data-dashboard-scroller]')) scroller.scrollTop = 0;
+  });
+  await page.waitForTimeout(400);
+}
+
+/**
  * Dashboard of the logged-in owner: grid, folder, menus, dialogs, selection.
  *
  * @param page - Phone page (logged in).
@@ -134,6 +147,7 @@ async function auditDashboard(page: Page, baseUrl: string, capture: Capture): Pr
   await page.goto(`${baseUrl}/perfuser`);
   await page.locator('.file-item').first().waitFor();
   await capture('dashboard');
+  await scrollDashboardToTop(page);
 
   // Folder sidebar drawer (資料夾 button in the breadcrumbs bar).
   await page.getByRole('button', { name: '資料夾', exact: true }).click();
@@ -146,6 +160,9 @@ async function auditDashboard(page: Page, baseUrl: string, capture: Capture): Pr
   await page.locator('.folder-card', { hasText: '專案 1' }).first().click();
   await page.getByRole('button', { name: /專案 1/ }).waitFor();
   await capture('dashboard-in-folder');
+  // The capture scrolled cards into view, which hides the phone breadcrumb
+  // row; scroll back up like a user would to reach it.
+  await scrollDashboardToTop(page);
   await page.getByRole('button', { name: '所有檔案' }).click();
   await page.locator('.file-item').first().waitFor();
 
@@ -203,7 +220,11 @@ async function auditDashboard(page: Page, baseUrl: string, capture: Capture): Pr
   await lowMenuButton.click();
   await page.getByText('QR Code', { exact: true }).waitFor();
   await capture('file-menu-low', 'div[style*="z-index: 9999"]');
-  await page.mouse.click(5, 300);
+  // Close it with a tap outside the menu (a fixed point could land on one of
+  // its items, e.g. QR Code, depending on where the card sits).
+  const lowMenuBox = await page.locator('div[style*="z-index: 9999"]').boundingBox();
+  if (lowMenuBox === null) throw new Error('the low file menu has no box');
+  await page.mouse.click(5, lowMenuBox.y > 300 ? 250 : lowMenuBox.y + lowMenuBox.height + 60);
   await page.locator('div[style*="z-index: 9999"]').waitFor({ state: 'detached' });
 
   // Settings modal, then selection mode with the batch action bar.
@@ -218,7 +239,8 @@ async function auditDashboard(page: Page, baseUrl: string, capture: Capture): Pr
   await page.locator('.file-item').first().waitFor();
 
   // Notes / links tab.
-  await page.getByRole('button', { name: /筆記 \/ 連結/ }).click();
+  // Phones switch content with the floating bottom tablist.
+  await page.getByRole('tab', { name: '筆記' }).click();
   await page.waitForTimeout(800);
   await capture('urls-tab');
 }

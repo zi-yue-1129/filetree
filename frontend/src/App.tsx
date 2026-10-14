@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useParams, useLocation, Link } from 'react-router-dom';
 import { Menu, Users } from 'lucide-react';
 const LandingPage = React.lazy(() => import('./pages/LandingPage').then(module => ({ default: module.LandingPage })));
@@ -27,6 +27,7 @@ import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
 import { isMobileNative } from './native';
 import { AppLinkNavigator } from './native/AppLinkNavigator';
+import { MobileTopRow } from './components/user-page/MobileTopRow';
 
 interface UserData {
   users?: Array<{ username: string; folder: string }>;
@@ -59,13 +60,25 @@ const PageLoadingIndicator: React.FC = () => (
   </div>
 );
 
-// Main content wrapper that handles data fetching based on route
-const MainContent: React.FC<{
+/** Props of {@link MainContent}. */
+interface MainContentProps {
   users: Array<{ username: string; folder: string }>;
   config: { allowed_extensions?: string[] };
   loading: boolean;
   onOpenDirectory?: () => void;
-}> = ({ users, config, loading, onOpenDirectory }) => {
+  /** Toggle the left navigation drawer (phone user-page top row). */
+  onToggleSidebar: () => void;
+  /** Toggle the right directory drawer (phone user-page top row). */
+  onToggleDirectory: () => void;
+}
+
+/**
+ * Main content wrapper that handles data fetching based on route.
+ *
+ * @param props - Component props.
+ * @returns The page for the current route.
+ */
+const MainContent: React.FC<MainContentProps> = ({ users, config, loading, onOpenDirectory, onToggleSidebar, onToggleDirectory }) => {
   const { username } = useParams<{ username: string }>();
   const location = useLocation();
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -98,8 +111,19 @@ const MainContent: React.FC<{
     };
   }, [username, token]);
 
+  // Phones: user-page routes have no app header bar; while such a route
+  // loads or shows "not found", the floating menu/directory buttons stand in.
+  const dashboardTopRow = username ? (
+    <MobileTopRow onToggleSidebar={onToggleSidebar} onToggleDirectory={onToggleDirectory} className="absolute inset-x-0 top-0 z-20" />
+  ) : null;
+
   if (loading || userLoading) {
-    return <PageLoadingIndicator />;
+    return (
+      <>
+        {dashboardTopRow}
+        <PageLoadingIndicator />
+      </>
+    );
   }
 
   // Home page - show upload center
@@ -126,11 +150,18 @@ const MainContent: React.FC<{
   if (username) {
     // If user not found, show 404
     if (userData?.error) {
-      return <NotFoundPage />;
+      return (
+        <>
+          {dashboardTopRow}
+          <NotFoundPage />
+        </>
+      );
     }
     return (
       <UserPage
         data={userData || { user: { username }, usage: 0, files: [], urls: [] }}
+        onToggleSidebar={onToggleSidebar}
+        onToggleDirectory={onToggleDirectory}
       />
     );
   }
@@ -154,8 +185,9 @@ const MainLayout: React.FC<{
   const [openDrawer, setOpenDrawer] = useState<'sidebar' | 'directory' | null>(null);
   const sidebarOpen = openDrawer === 'sidebar';
   const directoryOpen = openDrawer === 'directory';
-  const toggleSidebar = (): void => setOpenDrawer((current) => (current === 'sidebar' ? null : 'sidebar'));
-  const toggleDirectory = (): void => setOpenDrawer((current) => (current === 'directory' ? null : 'directory'));
+  // Stable: they are passed to the memoized UserPage.
+  const toggleSidebar = useCallback((): void => setOpenDrawer((current) => (current === 'sidebar' ? null : 'sidebar')), []);
+  const toggleDirectory = useCallback((): void => setOpenDrawer((current) => (current === 'directory' ? null : 'directory')), []);
   const location = useLocation();
 
   // Determine if we constitute a "dashboard" view (UserPage) that needs independent scrolling panes
@@ -174,7 +206,8 @@ const MainLayout: React.FC<{
 
   return (
     <div className="h-dvh flex flex-col relative overflow-hidden bg-transparent">
-      <header className="glass-header-premium lg:hidden">
+      {/* Phones: user pages replace this bar with floating buttons (UserPage). */}
+      {!isDashboard && <header className="glass-header-premium lg:hidden">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -198,7 +231,7 @@ const MainLayout: React.FC<{
             <Users className="w-5 h-5" />
           </button>
         </div>
-      </header>
+      </header>}
 
       <div className="flex-1 flex relative overflow-hidden">
         {/* Left Sidebar - Navigation */}
@@ -210,7 +243,7 @@ const MainLayout: React.FC<{
         {/* Center Content */}
         <main className={cn(
           "flex-1 min-w-0 flex flex-col transition-all duration-300 relative",
-          location.pathname !== '/' && "p-4 lg:p-6 xl:p-8",
+          location.pathname !== '/' && (isDashboard ? "p-0 lg:p-6 xl:p-8" : "p-4 lg:p-6 xl:p-8"),
           (isDashboard || location.pathname === '/') 
             ? "overflow-hidden" 
             : "custom-scrollbar overflow-y-auto"
@@ -225,6 +258,8 @@ const MainLayout: React.FC<{
               config={config}
               loading={loading}
               onOpenDirectory={() => setOpenDrawer('directory')}
+              onToggleSidebar={toggleSidebar}
+              onToggleDirectory={toggleDirectory}
             />
           </React.Suspense>
         </main>
