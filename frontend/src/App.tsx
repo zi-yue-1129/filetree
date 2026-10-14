@@ -149,8 +149,13 @@ const MainLayout: React.FC<{
   config: { allowed_extensions?: string[] };
   loading: boolean;
 }> = ({ users, config, loading }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [directoryOpen, setDirectoryOpen] = useState(false);
+  // One state for both mobile drawers so the menu and the directory can never
+  // be open at the same time: opening one closes the other.
+  const [openDrawer, setOpenDrawer] = useState<'sidebar' | 'directory' | null>(null);
+  const sidebarOpen = openDrawer === 'sidebar';
+  const directoryOpen = openDrawer === 'directory';
+  const toggleSidebar = (): void => setOpenDrawer((current) => (current === 'sidebar' ? null : 'sidebar'));
+  const toggleDirectory = (): void => setOpenDrawer((current) => (current === 'directory' ? null : 'directory'));
   const location = useLocation();
 
   // Determine if we constitute a "dashboard" view (UserPage) that needs independent scrolling panes
@@ -160,8 +165,7 @@ const MainLayout: React.FC<{
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
-        setSidebarOpen(false);
-        setDirectoryOpen(false);
+        setOpenDrawer(null);
       }
     };
     window.addEventListener('resize', handleResize);
@@ -174,8 +178,9 @@ const MainLayout: React.FC<{
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={toggleSidebar}
               className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="功能選單"
             >
               <Menu className="w-6 h-6" />
             </button>
@@ -186,7 +191,7 @@ const MainLayout: React.FC<{
             </Link>
           </div>
           <button
-            onClick={() => setDirectoryOpen(!directoryOpen)}
+            onClick={toggleDirectory}
             className="p-2 rounded-xl bg-white/60 dark:bg-white/5 text-gray-600 dark:text-neural-violet hover:bg-purple-500/10 transition-colors border border-white/20"
             aria-label="目錄"
           >
@@ -198,8 +203,8 @@ const MainLayout: React.FC<{
       <div className="flex-1 flex relative overflow-hidden">
         {/* Left Sidebar - Navigation */}
         <Sidebar 
-          isOpen={sidebarOpen} 
-          onToggle={() => setSidebarOpen(!sidebarOpen)} 
+          isOpen={sidebarOpen}
+          onToggle={toggleSidebar}
         />
 
         {/* Center Content */}
@@ -219,7 +224,7 @@ const MainLayout: React.FC<{
               users={users}
               config={config}
               loading={loading}
-              onOpenDirectory={() => setDirectoryOpen(true)}
+              onOpenDirectory={() => setOpenDrawer('directory')}
             />
           </React.Suspense>
         </main>
@@ -228,7 +233,7 @@ const MainLayout: React.FC<{
         <PublicDirectory
           users={users}
           isOpen={directoryOpen}
-          onToggle={() => setDirectoryOpen(!directoryOpen)}
+          onToggle={toggleDirectory}
         />
       </div>
     </div>
