@@ -585,8 +585,11 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
         >
           <DropdownMenu
             trigger={
-              <button 
-                className="p-2 sm:p-1.5 rounded-lg transition-colors shadow-sm bg-white/85 dark:bg-black/60 text-gray-500 hover:text-cyan-500 min-w-11 min-h-11 flex items-center justify-center"
+              <button
+                aria-label={`${file.name} 的操作`}
+                // A small translucent circle keeps the thumbnail visible;
+                // tap-target adds an invisible 44px touch area around it.
+                className="relative tap-target w-8 h-8 rounded-full transition-colors bg-black/35 text-white hover:text-cyan-300 flex items-center justify-center"
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}

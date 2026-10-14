@@ -341,6 +341,78 @@ async function scrollDashboard(page: Page, deltaY: number): Promise<void> {
 }
 
 /**
+ * Phone: the ⋮ action buttons on grid cards must stay unobtrusive. The folder
+ * card's button sat on top of the folder name, and the file card's button was
+ * a 44px dark square pasted over the thumbnail. The visible button must not
+ * overlap the folder name and must be at most 32px with a translucent
+ * background (the 44px touch area is invisible).
+ *
+ * @param page - Phone page.
+ * @param baseUrl - App URL.
+ */
+async function checkCardMenuButtons(page: Page, baseUrl: string): Promise<void> {
+  // The owner's phone is 412 CSS px wide, where the folder grid has three
+  // narrow columns and the overlap showed; restore the harness size after.
+  const originalViewport = page.viewportSize();
+  if (originalViewport === null) throw new Error('page has no viewport size');
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(`${baseUrl}/perfuser`);
+  await page.locator('.folder-card').first().waitFor();
+  await page.waitForTimeout(500);
+  const report = await page.evaluate(() => {
+    /** Whether two rectangles overlap by more than half a pixel. */
+    const overlaps = (a: DOMRect, b: DOMRect): boolean =>
+      Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 &&
+      Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+    /** Background alpha of an element (0 when transparent). */
+    const backgroundAlpha = (element: Element): number => {
+      const match = getComputedStyle(element).backgroundColor.match(/rgba?\(([^)]+)\)/);
+      if (!match) return 0;
+      const parts = match[1].split(',').map((part) => Number.parseFloat(part));
+      return parts.length === 4 ? parts[3] : 1;
+    };
+    const problems: string[] = [];
+    for (const card of Array.from(document.querySelectorAll('.folder-card')).slice(0, 6)) {
+      const button = card.querySelector('button[aria-label$="的操作"]');
+      const name = card.querySelector('[data-folder-name]');
+      if (!button || !name) {
+        problems.push(`folder card without menu button or [data-folder-name]: ${card.textContent?.trim()}`);
+        continue;
+      }
+      // Measure the visible text: the text's own box (not the block box),
+      // clipped to the element because truncated overflow is not painted.
+      const range = document.createRange();
+      range.selectNodeContents(name);
+      const textBox = range.getBoundingClientRect();
+      const clipBox = name.getBoundingClientRect();
+      const visibleText = new DOMRect(
+        textBox.left,
+        textBox.top,
+        Math.max(0, Math.min(textBox.right, clipBox.right) - textBox.left),
+        textBox.height,
+      );
+      if (overlaps(button.getBoundingClientRect(), visibleText)) {
+        problems.push(`folder ⋮ overlaps the name "${name.textContent?.trim()}"`);
+      }
+    }
+    for (const card of Array.from(document.querySelectorAll('.file-item[data-id^="file:"]')).slice(0, 6)) {
+      const button = card.querySelector('button[aria-label$="的操作"]');
+      if (!button) {
+        problems.push(`file card without a labelled menu button: ${card.getAttribute('data-id')}`);
+        continue;
+      }
+      const box = button.getBoundingClientRect();
+      if (box.width > 32.5 || box.height > 32.5) problems.push(`file ⋮ is ${Math.round(box.width)}x${Math.round(box.height)}, must be ≤ 32px`);
+      const alpha = backgroundAlpha(button);
+      if (alpha > 0.45) problems.push(`file ⋮ background alpha ${alpha} is a solid block`);
+    }
+    return problems;
+  });
+  await page.setViewportSize(originalViewport);
+  check(report.length === 0, `card menu buttons are obtrusive:\n  ${report.join('\n  ')}`);
+}
+
+/**
  * Phone: redesigned user page. A floating, buttons-only top row (menu, lock,
  * settings, directory; no "FileNexus" bar) stays fixed; the user name scrolls
  * away with the content; the breadcrumb row hides while scrolling down and
@@ -811,6 +883,7 @@ async function main(): Promise<void> {
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);
         if (mobile) await checkMobileUserPageLayout(page, stack.baseUrl);
+        if (mobile) await checkCardMenuButtons(page, stack.baseUrl);
         if (mobile) await checkTapTargets(page, stack.baseUrl);
         if (!mobile && effects === 'full') {
           await page.goto(`${stack.baseUrl}/`);

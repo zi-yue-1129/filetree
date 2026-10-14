@@ -579,7 +579,8 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
         </div>
       )}
 
-      <div className="flex items-center gap-3">
+      {/* pr-6 on phones keeps the name clear of the absolute ⋮ button. */}
+      <div className={cn("flex items-center gap-3 w-full", renamingFolderId !== folder.id && "pr-6 lg:pr-0")}>
         {/* Phones hide the icon while renaming so the input and two 44px
             buttons fit the narrow card. */}
         <div className={cn(
@@ -633,12 +634,12 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
               </button>
             </div>
           ) : (
-            <h4 className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate group-hover:text-cyan-600 transition-colors">
+            <h4 data-folder-name className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate group-hover:text-cyan-600 transition-colors">
               {folder.name}
             </h4>
           )}
         </div>
-        
+
         {/* Desktop hover actions */}
             {/* Desktop Hover Actions (Overlay) */}
             {!renamingFolderId && (
