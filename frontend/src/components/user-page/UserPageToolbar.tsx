@@ -43,7 +43,7 @@ export const UserPageToolbar: React.FC<UserPageToolbarProps> = ({
         <button
           onClick={() => onTabChange('files')}
           className={cn(
-            "flex-1 sm:flex-none px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 flex items-center justify-center gap-1.5 relative overflow-hidden",
+            "flex-1 sm:flex-none min-h-11 lg:min-h-0 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 flex items-center justify-center gap-1.5 relative overflow-hidden",
             activeTab === 'files'
               ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
               : "text-gray-500 dark:text-gray-400 hover:bg-white/40 dark:hover:bg-white/5"
@@ -55,7 +55,7 @@ export const UserPageToolbar: React.FC<UserPageToolbarProps> = ({
         <button
           onClick={() => onTabChange('urls')}
           className={cn(
-            "flex-1 sm:flex-none px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 flex items-center justify-center gap-1.5 relative overflow-hidden",
+            "flex-1 sm:flex-none min-h-11 lg:min-h-0 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 flex items-center justify-center gap-1.5 relative overflow-hidden",
             activeTab === 'urls'
               ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20"
               : "text-gray-500 dark:text-gray-400 hover:bg-white/40 dark:hover:bg-white/5"

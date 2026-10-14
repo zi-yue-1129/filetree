@@ -179,12 +179,12 @@ const MainLayout: React.FC<{
           <div className="flex items-center gap-4">
             <button
               onClick={toggleSidebar}
-              className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="lg:hidden p-2.5 -ml-0.5 hover:bg-white/10 rounded-lg transition-colors"
               aria-label="功能選單"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <Link to="/" className="flex items-center gap-2 group">
+            <Link to="/" className="flex items-center gap-2 group min-h-11">
               <span className="filenexus-brand">
                 FileNexus
               </span>
@@ -192,7 +192,7 @@ const MainLayout: React.FC<{
           </div>
           <button
             onClick={toggleDirectory}
-            className="p-2 rounded-xl bg-white/60 dark:bg-white/5 text-gray-600 dark:text-neural-violet hover:bg-purple-500/10 transition-colors border border-white/20"
+            className="min-w-11 min-h-11 flex items-center justify-center rounded-xl bg-white/60 dark:bg-white/5 text-gray-600 dark:text-neural-violet hover:bg-purple-500/10 transition-colors border border-white/20"
             aria-label="目錄"
           >
             <Users className="w-5 h-5" />

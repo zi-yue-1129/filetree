@@ -263,7 +263,7 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
             "transition-opacity relative",
             (isSelected || isSelectionMode) 
               ? "opacity-100" 
-              : "opacity-0 group-hover:opacity-100"
+              : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
           )}>
              {folder.is_locked && (
                 <div className="absolute -top-1.5 -left-1.5 bg-violet-600 text-white p-1 rounded-lg shadow-xl z-20 ring-2 ring-white dark:ring-black">
@@ -456,7 +456,7 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
                     <DropdownMenu
                       trigger={
                         <button 
-                          className="p-2 text-gray-400 hover:text-cyan-600 rounded-lg transition-colors"
+                          className="min-w-11 min-h-11 flex items-center justify-center p-2 text-gray-400 hover:text-cyan-600 rounded-lg transition-colors"
                           onMouseDown={(e) => e.stopPropagation()}
                           onMouseUp={(e) => e.stopPropagation()}
                           onTouchStart={(e) => e.stopPropagation()}
@@ -532,7 +532,7 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
           onMouseUp={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
-          className="p-1.5 rounded-lg bg-white/90 dark:bg-black/80 shadow-sm hover:bg-white dark:hover:bg-black flex items-center justify-center"
+          className="relative tap-target p-1.5 rounded-lg bg-white/90 dark:bg-black/80 shadow-sm hover:bg-white dark:hover:bg-black flex items-center justify-center"
         >
            {isSelected ? <CheckSquare className="w-4 h-4 text-cyan-600" /> : <Square className="w-4 h-4 text-gray-400" />}
         </button>
@@ -550,7 +550,7 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
       )}
 
       {/* Mobile Action Menu (top-right) */}
-      {!isSelectionMode && (
+      {!isSelectionMode && renamingFolderId !== folder.id && (
         <div 
           className="absolute top-1.5 right-1.5 z-30 lg:hidden"
           onClick={(e) => e.stopPropagation()}
@@ -561,8 +561,11 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
         >
           <DropdownMenu
             trigger={
+              // Visual stays 32px (a bigger box covered the folder name);
+              // tap-target gives it an invisible 44px touch area.
               <button
-                className="p-1.5 rounded-lg backdrop-blur-sm transition-all shadow-sm bg-white/80 dark:bg-black/50 text-gray-500 hover:text-cyan-500 min-w-8 min-h-8 flex items-center justify-center"
+                aria-label={`${folder.name} 的操作`}
+                className="relative tap-target p-1.5 rounded-lg backdrop-blur-sm transition-all shadow-sm bg-white/80 dark:bg-black/50 text-gray-500 hover:text-cyan-500 min-w-8 min-h-8 flex items-center justify-center"
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
@@ -577,12 +580,18 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
       )}
 
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 rounded-xl shrink-0">
+        {/* Phones hide the icon while renaming so the input and two 44px
+            buttons fit the narrow card. */}
+        <div className={cn(
+          "p-2 bg-cyan-100 dark:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 rounded-xl shrink-0",
+          renamingFolderId === folder.id && "hidden lg:block"
+        )}>
           <FolderIcon className="w-5 h-5" />
         </div>
         <div className="min-w-0 flex-1">
           {renamingFolderId === folder.id ? (
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            // Phones: input on its own row and 44px confirm/cancel buttons below it.
+            <div className="flex flex-wrap lg:flex-nowrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <input
                 autoFocus
                 value={newName}
@@ -591,7 +600,7 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
                   if (e.key === 'Enter') handleRenameFolder();
                   if (e.key === 'Escape') setRenamingFolderId(null);
                 }}
-                className="w-full text-xs p-1 rounded border border-cyan-500/50 bg-white dark:bg-black/20 outline-none"
+                className="w-full min-h-11 lg:min-h-0 text-xs p-1 rounded border border-cyan-500/50 bg-white dark:bg-black/20 outline-none"
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
@@ -605,7 +614,8 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
                 onTouchStart={(e) => e.stopPropagation()}
                 onTouchEnd={(e) => e.stopPropagation()}
                 disabled={isRenaming}
-                className="p-1 text-green-500 hover:bg-green-50 dark:hover:bg-green-500/10 rounded"
+                aria-label="確認重新命名"
+                className="flex-1 lg:flex-none min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 flex items-center justify-center p-1 text-green-500 hover:bg-green-50 dark:hover:bg-green-500/10 rounded"
               >
                 <Check className="w-3 h-3" />
               </button>
@@ -616,7 +626,8 @@ export const FolderItem: React.FC<FolderItemProps> = React.memo(({
                 onTouchStart={(e) => e.stopPropagation()}
                 onTouchEnd={(e) => e.stopPropagation()}
                 disabled={isRenaming}
-                className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded"
+                aria-label="取消重新命名"
+                className="flex-1 lg:flex-none min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 flex items-center justify-center p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded"
               >
                 <X className="w-3 h-3" />
               </button>

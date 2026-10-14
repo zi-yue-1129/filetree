@@ -313,7 +313,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
               "transition-opacity relative",
               (isSelected || isSelectionMode) 
                 ? "opacity-100" 
-                : "opacity-0 group-hover:opacity-100"
+                : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
             )}>
               {file.is_locked && (
                 <div className="absolute -top-1.5 -left-1.5 bg-violet-600 text-white p-1 rounded-lg shadow-xl z-20 ring-2 ring-white dark:ring-black">
@@ -505,7 +505,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                 <DropdownMenu
                   trigger={
                     <button 
-                      className="p-2 text-gray-400 hover:text-cyan-600 rounded-lg transition-colors"
+                      className="min-w-11 min-h-11 flex items-center justify-center p-2 text-gray-400 hover:text-cyan-600 rounded-lg transition-colors"
                       onMouseDown={(e) => e.stopPropagation()}
                       onMouseUp={(e) => e.stopPropagation()}
                       onTouchStart={(e) => e.stopPropagation()}
@@ -556,11 +556,17 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
             ? "opacity-100 pointer-events-auto" 
             : "opacity-0 pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto"
         )}>
+          {/* The button handles its own press: without stopping mouseup/touchend
+              the card's long-press handler toggled the selection as well (and
+              its touchend preventDefault swallowed the button's click). */}
           <button
             onClick={(e) => { e.stopPropagation(); onToggleSelect('file', file.name); }}
             onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
-            className="p-1.5 bg-white/90 dark:bg-black/80 rounded-lg shadow-sm flex items-center justify-center"
+            onTouchEnd={(e) => e.stopPropagation()}
+            aria-label={isSelected ? `取消選取 ${file.name}` : `選取 ${file.name}`}
+            className="relative tap-target p-1.5 bg-white/90 dark:bg-black/80 rounded-lg shadow-sm flex items-center justify-center"
           >
             {isSelected ? <CheckSquare className="w-4 h-4 text-cyan-600" /> : <Square className="w-4 h-4 text-gray-400" />}
           </button>
@@ -580,7 +586,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
           <DropdownMenu
             trigger={
               <button 
-                className="p-2 sm:p-1.5 rounded-lg transition-colors shadow-sm bg-white/85 dark:bg-black/60 text-gray-500 hover:text-cyan-500 min-w-10 min-h-10 flex items-center justify-center"
+                className="p-2 sm:p-1.5 rounded-lg transition-colors shadow-sm bg-white/85 dark:bg-black/60 text-gray-500 hover:text-cyan-500 min-w-11 min-h-11 flex items-center justify-center"
                 onMouseDown={(e) => e.stopPropagation()}
                 onMouseUp={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
@@ -742,13 +748,13 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                   if (e.key === 'Enter') handleRename(file.name);
                   if (e.key === 'Escape') setRenamingFile(null);
                 }}
-                className="w-full text-sm p-2 rounded-lg border border-cyan-500/50 bg-white dark:bg-black/20 outline-none"
+                className="w-full min-h-11 lg:min-h-0 text-sm p-2 rounded-lg border border-cyan-500/50 bg-white dark:bg-black/20 outline-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={() => handleRename(file.name)}
                   disabled={isRenaming}
-                  className="flex-1 py-1.5 px-3 text-xs font-medium bg-cyan-500 text-white rounded-lg"
+                  className="flex-1 min-h-11 lg:min-h-0 py-1.5 px-3 text-xs font-medium bg-cyan-500 text-white rounded-lg"
                 >
                   {isRenaming ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                   確認
@@ -756,7 +762,7 @@ export const FileItem: React.FC<FileItemProps> = React.memo(({
                 <button
                   onClick={() => setRenamingFile(null)}
                   disabled={isRenaming}
-                  className="flex-1 py-1.5 px-3 text-xs font-medium bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg"
+                  className="flex-1 min-h-11 lg:min-h-0 py-1.5 px-3 text-xs font-medium bg-gray-200 dark:bg-white/10 text-gray-700 dark:text-gray-300 rounded-lg"
                 >
                   <X className="w-3 h-3" />
                   取消

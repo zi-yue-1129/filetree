@@ -193,7 +193,7 @@ const MobileDrillDownMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect, 
                     {history.length > 0 && (
                       <button
                         onClick={handleBack}
-                        className="p-1 -ml-1 text-gray-500 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+                        className="min-w-11 min-h-11 -my-2 -ml-3 flex items-center justify-center text-gray-500 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
                       >
                         <ChevronLeft className="w-5 h-5" />
                       </button>
@@ -207,7 +207,7 @@ const MobileDrillDownMenu: React.FC<CascadingMenuProps> = ({ folders, onSelect, 
                         setIsOpen(false);
                         setHistory([]);
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
+                    className="min-w-11 min-h-11 -my-2 -mr-3 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"
                   >
                     <X className="w-5 h-5" />
                   </button>

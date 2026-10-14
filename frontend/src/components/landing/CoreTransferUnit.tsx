@@ -112,11 +112,22 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
                   placeholder="輸入內容..."
                   className="w-full h-32 lg:h-[12vh] min-h-25 bg-gray-50 dark:bg-white/3 border border-gray-200 dark:border-white/10 rounded-2xl px-5 py-4 outline-none focus:border-cyan-500/50 focus:bg-white dark:focus:bg-white/8 transition-all text-gray-900 dark:text-white/90 text-base lg:text-[clamp(1rem,1.5vw,1.25rem)] font-medium shadow-inner resize-none placeholder:text-gray-400 dark:placeholder:text-white/20 custom-scrollbar"
                 />
-                <div className="absolute bottom-4 right-4 flex items-center gap-2 text-[0.6rem] text-gray-400 uppercase tracking-widest font-bold bg-white dark:bg-white/10 border border-gray-100 dark:border-white/5 px-3 py-1.5 rounded-full pointer-events-none opacity-40 group-focus-within/input:opacity-100 transition-all transform group-focus-within/input:scale-105 shadow-sm">
+                {/* The Enter pill is a real button: on phones it looked like one
+                    but ignored taps. preventDefault on mousedown keeps the focus
+                    (and the on-screen keyboard) in the textarea; tap-target gives
+                    it a 44px touch area without changing its look. */}
+                <button
+                  type="button"
+                  onClick={onAddNote}
+                  onMouseDown={(e) => e.preventDefault()}
+                  aria-label="加入筆記"
+                  title="加入筆記 (Enter)"
+                  className="absolute bottom-4 right-4 tap-target flex items-center gap-2 text-[0.6rem] text-gray-400 uppercase tracking-widest font-bold bg-white dark:bg-white/10 border border-gray-100 dark:border-white/5 px-3 py-1.5 rounded-full cursor-pointer opacity-40 hover:opacity-100 group-focus-within/input:opacity-100 transition-all transform group-focus-within/input:scale-105 active:scale-95 shadow-sm"
+                >
                   <span className="hidden sm:inline">按 Enter</span>
                   <span className="sm:hidden">Enter</span>
                   <ArrowRight className="w-3 h-3" />
-                </div>
+                </button>
               </div>
             </div>
 

@@ -88,7 +88,7 @@ export const UploadQueueSection: React.FC<UploadQueueSectionProps> = ({ deviceSi
                       type="button"
                       aria-label={`取消上傳 ${job.name}`}
                       onClick={() => void run(() => FileNexusNative.cancelUpload({ jobId: job.jobId }), 'Cancel upload failed')}
-                      className="p-1 rounded-lg hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
+                      className="relative tap-target p-1 rounded-lg hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-quantum-cyan"
                     >
                       <X className="w-4 h-4 text-red-500" />
                     </button>

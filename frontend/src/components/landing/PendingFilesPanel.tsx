@@ -85,7 +85,9 @@ const PendingFilesPanelView: React.FC<PendingFilesPanelProps> = ({
                     </p>
                     <button
                       onClick={() => onRemoveFile(file.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors opacity-100 p-1 shrink-0"
+                      aria-label={`移除 ${file.name}`}
+                      // tap-target: invisible 44px touch area around the small icon.
+                      className="relative tap-target text-gray-400 hover:text-red-500 transition-colors opacity-100 p-1 shrink-0"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>

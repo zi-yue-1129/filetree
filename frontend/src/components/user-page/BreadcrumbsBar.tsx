@@ -39,12 +39,14 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
   const isAllCurrentTypeSelected = currentTypeSelectedCount === filteredCount && filteredCount > 0;
 
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center w-full h-9 overflow-hidden pr-1">
-      <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden no-scrollbar py-1 min-w-0 transition-all duration-300">
+    // Phones: every control is at least 44x44 CSS px (touch targets), so the
+    // bar grows to fit them; desktop (lg) keeps the compact 36px bar.
+    <div className="grid grid-cols-[1fr_auto] items-center w-full lg:h-9 overflow-hidden pr-1">
+      <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden no-scrollbar py-0.5 lg:py-1 min-w-0 transition-all duration-300">
         <button
           onClick={onSidebarToggle}
           className={cn(
-            "p-1.5 rounded-lg bg-white/40 dark:bg-white/5 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/10 transition-colors border border-white/20 shrink-0",
+            "min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 flex items-center justify-center p-1.5 rounded-lg bg-white/40 dark:bg-white/5 bg-white/40 dark:bg-white/5 hover:bg-white/60 dark:hover:bg-white/10 transition-colors border border-white/20 shrink-0",
              activeTab === 'files' ? "text-gray-600 dark:text-cyan-500 hover:bg-cyan-500/10" : "text-gray-600 dark:text-violet-500 hover:bg-violet-500/10"
           )}
           aria-label="資料夾"
@@ -55,7 +57,7 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
         <button
           onClick={() => onNavigate(null)}
           className={cn(
-            "px-2 py-1 rounded-lg text-xs font-bold transition-all shrink-0",
+            "min-h-11 lg:min-h-0 px-3 lg:px-2 py-1 rounded-lg text-xs font-bold transition-all shrink-0",
             activeFolderId === null
               ? activeTab === 'files' 
                   ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20" 
@@ -71,7 +73,7 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
             <button
               onClick={() => onNavigate(crumb.id)}
               className={cn(
-                "px-2 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0",
+                "min-h-11 lg:min-h-0 px-3 lg:px-2 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0",
                 idx === arr.length - 1
                   ? activeTab === 'files'
                       ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
@@ -92,12 +94,12 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.8, opacity: 0 }}
-            className="flex items-center gap-1.5 flex-nowrap shrink-0 bg-white/60 dark:bg-white/10 backdrop-blur-md px-2 py-1 rounded-xl border border-white/20 shadow-sm ml-2"
+            className="flex items-center gap-1.5 flex-nowrap shrink-0 bg-white/60 dark:bg-white/10 backdrop-blur-md p-0.5 lg:px-2 lg:py-1 rounded-xl border border-white/20 shadow-sm ml-2"
           >
             <button
               onClick={onSelectAll}
               className={cn(
-                "p-1.5 rounded-lg border flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-sm",
+                "min-h-11 lg:min-h-0 px-3 lg:p-1.5 rounded-lg border flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-sm",
                  activeTab === 'files' 
                     ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/10" 
                     : "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/10"
@@ -108,7 +110,8 @@ export const BreadcrumbsBar: React.FC<BreadcrumbsBarProps> = ({
             </button>
             <button
               onClick={() => { onSelectionModeChange(false); onClearSelection(); }}
-              className="p-1.5 rounded-lg bg-gray-500/10 text-gray-600 dark:text-gray-400 border border-gray-500/10 shrink-0 shadow-sm"
+              aria-label="結束選取"
+              className="min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 flex items-center justify-center p-1.5 rounded-lg bg-gray-500/10 text-gray-600 dark:text-gray-400 border border-gray-500/10 shrink-0 shadow-sm"
             >
               <X className="w-4 h-4" />
             </button>

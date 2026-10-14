@@ -143,7 +143,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     role="button"
                     tabIndex={0}
                     className={cn(
-                        "flex flex-col items-center gap-1 min-w-[3rem] text-gray-600 dark:text-gray-400 transition-opacity",
+                        "flex flex-col items-center justify-center gap-1 min-w-[3rem] min-h-11 text-gray-600 dark:text-gray-400 transition-opacity",
                         isBatchSyncing ? "opacity-50 cursor-not-allowed" : "opacity-100 cursor-pointer"
                     )}
                    >

@@ -53,10 +53,12 @@ const PendingNotesPanelView: React.FC<PendingNotesPanelProps> = ({
                   <p className="text-sm text-gray-700 dark:text-gray-200 break-all font-mono leading-relaxed">
                     {note}
                   </p>
-                  {/* Make close button always visible on mobile/touch, hover only on desktop */}
+                  {/* Make close button always visible on mobile/touch, hover only on desktop;
+                      tap-target adds an invisible 44px touch area around the small icon. */}
                   <button
                     onClick={() => onRemoveNote(idx)}
-                    className="text-gray-400 hover:text-red-500 transition-colors opacity-100 lg:opacity-0 lg:group-hover/item:opacity-100 shrink-0 p-1"
+                    aria-label="移除筆記"
+                    className="relative tap-target text-gray-400 hover:text-red-500 transition-colors opacity-100 lg:opacity-0 lg:group-hover/item:opacity-100 shrink-0 p-1"
                   >
                     <X className="w-4 h-4 lg:w-3.5 lg:h-3.5" />
                   </button>

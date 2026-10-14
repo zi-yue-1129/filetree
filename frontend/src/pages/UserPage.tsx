@@ -1068,7 +1068,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                >
                    <div className="flex items-center justify-between mb-2">
                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-600 dark:text-quantum-cyan">分享連結</span>
-                       <button onClick={() => setShareUrl(null)} className="text-gray-400 dark:text-white/40 hover:text-gray-900 dark:hover:text-white transition-colors">
+                       <button onClick={() => setShareUrl(null)} aria-label="關閉" className="relative tap-target text-gray-400 dark:text-white/40 hover:text-gray-900 dark:hover:text-white transition-colors">
                            <X className="w-5 h-5" />
                        </button>
                    </div>
@@ -1124,11 +1124,11 @@ const UserPageView: React.FC<UserPageProps> = ({
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => handleUpdateProfile(true)}
-                                    className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-all", dashboardData.user?.show_in_list !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500")}
+                                    className={cn("min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all", dashboardData.user?.show_in_list !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500")}
                                 >顯示</button>
                                 <button
                                     onClick={() => handleUpdateProfile(false)}
-                                    className={cn("px-3 py-1.5 rounded-lg text-xs font-bold transition-all", dashboardData.user?.show_in_list === false ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500")}
+                                    className={cn("min-w-11 min-h-11 lg:min-w-0 lg:min-h-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all", dashboardData.user?.show_in_list === false ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500")}
                                 >隱藏</button>
                             </div>
                         </div>
@@ -1138,7 +1138,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                             </div>
                             <button
                                 onClick={() => { setIsSelectionMode(true); setShowSettingsModal(false); }}
-                                className="px-4 py-2 bg-cyan-600 text-white font-bold rounded-xl text-xs"
+                                className="min-h-11 lg:min-h-0 px-4 py-2 bg-cyan-600 text-white font-bold rounded-xl text-xs"
                             >
                                 選擇檔案
                             </button>
