@@ -91,6 +91,25 @@ async function checkLanding(page: Page, baseUrl: string, workDir: string): Promi
 }
 
 /**
+ * The brand footer must not float over content on phones. With the on-screen
+ * keyboard open the visual viewport shrinks and a `position: fixed` footer
+ * sat right above the keyboard, covering the form field being typed into.
+ *
+ * @param page - Page on the landing route.
+ * @param mobile - Whether the page uses the phone viewport.
+ */
+async function checkFooterPlacement(page: Page, mobile: boolean): Promise<void> {
+  const footer = page.locator('footer', { hasText: 'Secure File Bridge Hub' });
+  const style = await footer.evaluate((element: Element) => {
+    const computed = getComputedStyle(element);
+    return { position: computed.position, pointerEvents: computed.pointerEvents };
+  });
+  const expectedPosition = mobile ? 'relative' : 'fixed';
+  check(style.position === expectedPosition, `footer must be ${expectedPosition} on ${mobile ? 'phone' : 'desktop'}, got ${style.position}`);
+  check(style.pointerEvents === 'none', `footer must not intercept taps, got pointer-events ${style.pointerEvents}`);
+}
+
+/**
  * Phone: the first visit to a user page through the 其他人 drawer must close
  * the drawer completely. Regression for the "fogged page on first open" bug:
  * the UserPage chunk was not loaded yet, so the navigation suspended the
@@ -567,6 +586,7 @@ async function main(): Promise<void> {
         // First, while the UserPage chunk is still unloaded (fresh page).
         if (mobile) await checkDirectoryFirstNavigation(page, stack.baseUrl);
         await checkLanding(page, stack.baseUrl, workDir);
+        await checkFooterPlacement(page, mobile);
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);
         if (!mobile && effects === 'full') {
