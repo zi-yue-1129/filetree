@@ -110,6 +110,23 @@ export interface PickFilesResult {
   files: NativeFile[];
 }
 
+/** Result of {@link FileNexusNativePlugin.pickFolder}. */
+export interface PickFolderResult {
+  /** Display name of the picked folder (first segment of every `relativePath`). */
+  folderName: string;
+  /**
+   * Every regular file below the folder, recursively, sorted by path. Each
+   * carries `relativePath` = `<folderName>/<sub dirs>/<name>`, the same shape
+   * the web uploader sends from `webkitRelativePath`.
+   */
+  files: NativeFile[];
+  /**
+   * Entries that cannot be uploaded and were left out (Android: virtual
+   * documents such as Google Docs, or directory cycles; iOS: unreadable items).
+   */
+  skippedCount: number;
+}
+
 /** Options for {@link FileNexusNativePlugin.enqueueUpload}. */
 export interface EnqueueUploadOptions {
   /** Files to upload; each becomes one job. */
@@ -318,6 +335,16 @@ export interface FileNexusNativePlugin {
    * the user dismisses the picker.
    */
   pickFiles(options?: PickFilesOptions): Promise<PickFilesResult>;
+
+  /**
+   * Open the system folder picker and return every file below the chosen
+   * folder with its folder-relative path, suitable for {@link enqueueUpload}
+   * (the server recreates the folder structure from `relativePath`).
+   * Android: Storage Access Framework tree with a persisted read grant.
+   * iOS: files are copied into app storage like {@link pickFiles}.
+   * Rejects with `CANCELLED` when the user dismisses the picker.
+   */
+  pickFolder(): Promise<PickFolderResult>;
 
   /**
    * Queue native TUS uploads (background, resumable, retried with backoff,

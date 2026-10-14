@@ -25,10 +25,15 @@ interface CoreTransferUnitProps {
   isSyncing: boolean;
   /**
    * Native apps only: open the system picker instead of the WebView file
-   * input (native uploads need content URIs, not File objects). When set,
-   * the folder button is hidden.
+   * input (native uploads need content URIs, not File objects).
    */
   onNativePickFiles?: () => void;
+  /**
+   * Native apps only: open the system folder picker instead of the WebView
+   * `webkitdirectory` input, which Android/iOS WebViews do not support. In
+   * native mode the folder button is shown only when this is set.
+   */
+  onNativePickFolder?: () => void;
 }
 
 export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
@@ -42,9 +47,13 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
   onSubmit,
   isSyncing,
   onNativePickFiles,
+  onNativePickFolder,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
+  // Native shells without a folder picker get a single full-width file button.
+  const showFolderButton = !onNativePickFiles || onNativePickFolder !== undefined;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -139,7 +148,7 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
             </div>
 
             {/* File Buttons Grid: Taller on mobile for easier tapping */}
-            <div className={cn("grid gap-3 lg:gap-4 h-28 lg:h-[15vh] min-h-25", onNativePickFiles ? "grid-cols-1" : "grid-cols-2")}>
+            <div className={cn("grid gap-3 lg:gap-4 h-28 lg:h-[15vh] min-h-25", showFolderButton ? "grid-cols-2" : "grid-cols-1")}>
               {/* Select File Button */}
               <button
                 onClick={() => (onNativePickFiles ? onNativePickFiles() : fileInputRef.current?.click())}
@@ -153,10 +162,10 @@ export const CoreTransferUnit: React.FC<CoreTransferUnitProps> = ({
                 </span>
               </button>
 
-              {/* Select Folder Button (web only) */}
-              {!onNativePickFiles && (
+              {/* Select Folder Button (web input, or the native folder picker) */}
+              {showFolderButton && (
               <button
-                onClick={() => folderInputRef.current?.click()}
+                onClick={() => (onNativePickFolder ? onNativePickFolder() : folderInputRef.current?.click())}
                 className="group/btn relative flex flex-col items-center justify-center gap-2 lg:gap-[1.5vh] rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-purple-500/50 hover:bg-purple-500/5 active:bg-purple-500/10 transition-all overflow-hidden"
               >
                 <div className="p-3 lg:p-[1.5vh] rounded-full bg-white dark:bg-white/10 group-hover/btn:scale-110 transition-transform shadow-sm group-active/btn:scale-95">

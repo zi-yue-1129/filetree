@@ -64,6 +64,8 @@ class UploadQueueWorker(context: Context, params: WorkerParameters) : CoroutineW
         }
         Notifications.cancel(applicationContext, notificationId)
         postSummary(completedNames, failures)
+        // Jobs that just finished may have been the last users of a picked file/folder grant.
+        UriGrants.releaseUnused(applicationContext)
         if (isStopped || retryLater) Result.retry() else Result.success()
     }
 

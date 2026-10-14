@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.activity.result.ActivityResult
@@ -59,6 +60,8 @@ class FileNexusNativePlugin : Plugin() {
         NativeEvents.register(eventListener)
         UploadQueue.kick(context)
         PhotoBackup.schedule(context)
+        // Startup sweep: drop SAF grants left over from finished or abandoned picks.
+        io.execute { UriGrants.releaseUnused(context) }
     }
 
     override fun handleOnDestroy() {
@@ -160,13 +163,7 @@ class FileNexusNativePlugin : Plugin() {
         }
         val files = JSArray()
         uris.forEach { uri ->
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: SecurityException) {
-                // Provider does not offer persistable grants; the temporary grant
-                // still covers uploads while this process lives.
-                Log.e(TAG, "Could not persist read permission for $uri", e)
-            }
+            UriGrants.persistPicked(context, uri)
             files.put(describeUri(uri))
         }
         call.resolve(JSObject().apply { put("files", files) })
@@ -188,6 +185,111 @@ class FileNexusNativePlugin : Plugin() {
             put("name", ShareReceiverActivity.sanitizeName(name ?: uri.lastPathSegment ?: "file"))
             put("mimeType", context.contentResolver.getType(uri) ?: "application/octet-stream")
             put("size", size)
+        }
+    }
+
+    /** `pickFolder()`: SAF tree picker, then a recursive listing on [io]. */
+    @PluginMethod
+    fun pickFolder(call: PluginCall) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(call, intent, "pickFolderResult")
+    }
+
+    /** Activity result of [pickFolder]. */
+    @ActivityCallback
+    fun pickFolderResult(call: PluginCall?, result: ActivityResult) {
+        if (call == null) {
+            Log.e(TAG, "pickFolder result arrived without a saved call")
+            return
+        }
+        val treeUri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || treeUri == null) {
+            call.reject("User cancelled the folder picker", "CANCELLED")
+            return
+        }
+        // One grant on the tree covers every child document URI, so queued
+        // uploads stay readable after the app process is killed.
+        UriGrants.persistPicked(context, treeUri)
+        io.execute {
+            try {
+                call.resolve(listFolder(treeUri))
+            } catch (e: IOException) {
+                Log.e(TAG, "Listing picked folder $treeUri failed", e)
+                call.reject("Could not read the folder: ${e.message}", "IO_ERROR", e)
+            } catch (e: RuntimeException) {
+                // SecurityException / IllegalArgumentException / IllegalStateException
+                // from the provider; reported to the UI, never swallowed.
+                Log.e(TAG, "Listing picked folder $treeUri failed", e)
+                call.reject("Could not read the folder: ${e.message}", "IO_ERROR", e)
+            }
+        }
+    }
+
+    /**
+     * Recursively list a SAF tree into the `PickFolderResult` shape.
+     *
+     * @throws IOException when the provider returns no cursor.
+     */
+    private fun listFolder(treeUri: Uri): JSObject {
+        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+        val rootName = queryDocuments(DocumentsContract.buildDocumentUriUsingTree(treeUri, rootId)).firstOrNull()?.displayName
+        val walk = FolderWalker.walk(rootId, rootName) { parentId ->
+            queryDocuments(DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId))
+        }
+        val files = JSArray()
+        walk.files.forEach { file ->
+            files.put(
+                JSObject().apply {
+                    put("uri", DocumentsContract.buildDocumentUriUsingTree(treeUri, file.documentId).toString())
+                    put("name", file.name)
+                    put("mimeType", file.mimeType)
+                    put("size", file.size)
+                    put("relativePath", file.relativePath)
+                    file.lastModified?.let { put("lastModified", it) }
+                },
+            )
+        }
+        return JSObject().apply {
+            put("folderName", walk.folderName)
+            put("files", files)
+            put("skippedCount", walk.skippedCount)
+        }
+    }
+
+    /**
+     * Query document rows (a single document or a directory's children).
+     *
+     * @throws IOException when the provider returns no cursor.
+     */
+    private fun queryDocuments(uri: Uri): List<TreeEntry> {
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+            DocumentsContract.Document.COLUMN_FLAGS,
+        )
+        val cursor = context.contentResolver.query(uri, projection, null, null, null)
+            ?: throw IOException("Document provider returned no cursor for $uri")
+        return cursor.use {
+            buildList {
+                while (it.moveToNext()) {
+                    val flags = if (it.isNull(5)) 0 else it.getInt(5)
+                    add(
+                        TreeEntry(
+                            documentId = it.getString(0),
+                            displayName = if (it.isNull(1)) null else it.getString(1),
+                            mimeType = if (it.isNull(2)) null else it.getString(2),
+                            size = if (it.isNull(3)) -1L else it.getLong(3),
+                            lastModified = if (it.isNull(4)) null else it.getLong(4).takeIf { modified -> modified > 0 },
+                            isVirtual = (flags and DocumentsContract.Document.FLAG_VIRTUAL_DOCUMENT) != 0,
+                        ),
+                    )
+                }
+            }
         }
     }
 

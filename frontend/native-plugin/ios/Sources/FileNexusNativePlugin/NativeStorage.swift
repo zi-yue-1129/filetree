@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import CryptoKit
+import UniformTypeIdentifiers
 import os
 
 /// Credentials in an executable-local Keychain; never a shared access group.
@@ -132,5 +133,91 @@ enum NativeStorage {
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                                              ofItemAtPath: destination.path)
         return destination
+    }
+
+    /// Move an app-private file (e.g. a picker copy) into another app directory without copying bytes.
+    static func move(_ url: URL, to directory: URL) throws -> URL {
+        guard url.isFileURL else { throw NativeFailure("Only local file URLs can be uploaded", code: "INVALID_ARGUMENT") }
+        let destination: URL = directory.appendingPathComponent(UUID().uuidString + "-" + url.lastPathComponent)
+        try FileManager.default.moveItem(at: url, to: destination)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                                             ofItemAtPath: destination.path)
+        return destination
+    }
+
+    /// Whether a file URL is a picker copy directly inside the `picked` directory.
+    static func isPickedCopy(_ url: URL) throws -> Bool {
+        guard url.isFileURL else { return false }
+        let picked: URL = try directory("picked")
+        return url.standardizedFileURL.deletingLastPathComponent().path == picked.standardizedFileURL.path
+    }
+
+    /// Delete picker copies left by a previous process. Enqueued picks were already moved into
+    /// the upload queue, and the UI's pending list does not survive a restart, so anything
+    /// still in `picked` at process start is unreachable. (Ages are not usable here because
+    /// `copyItem` keeps the source file's dates.)
+    static func removeOrphanedPicked() throws -> Void {
+        let picked: URL = try directory("picked")
+        for file: URL in try FileManager.default.contentsOfDirectory(at: picked, includingPropertiesForKeys: nil) {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// Make a provider name safe as one server path segment (no separators, never empty, `.` or `..`).
+    static func safeSegment(_ raw: String, fallback: String) -> String {
+        let replaced: String = String(raw.unicodeScalars.map { scalar -> Character in
+            scalar == "/" || scalar == "\\" || CharacterSet.controlCharacters.contains(scalar) ? "_" : Character(scalar)
+        })
+        let cleaned: String = String(replaced.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        return cleaned.isEmpty || cleaned == "." || cleaned == ".." ? fallback : cleaned
+    }
+
+    /// Copy every regular file below a security-scoped folder into durable storage.
+    ///
+    /// Returns the TypeScript `PickFolderResult` shape: each file's `relativePath` is
+    /// `<folder>/<sub dirs>/<name>` as the backend's `resolve_upload_folder` expects.
+    /// Symlinks and other non-regular items are counted in `skippedCount`.
+    static func copyFolder(_ folder: URL, to directory: URL) throws -> [String: Any] {
+        let scoped: Bool = folder.startAccessingSecurityScopedResource()
+        defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
+        guard folder.isFileURL else { throw NativeFailure("Only local folders can be uploaded", code: "INVALID_ARGUMENT") }
+        let folderName: String = safeSegment(folder.lastPathComponent, fallback: "folder")
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+        var enumerationError: Error?
+        guard let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys, options: [],
+            errorHandler: { url, error in
+                enumerationError = NativeFailure("Cannot read \(url.lastPathComponent): \(error.localizedDescription)")
+                return false
+            }) else {
+            throw NativeFailure("Cannot list folder \(folder.lastPathComponent)")
+        }
+        let rootComponents: [String] = folder.standardizedFileURL.pathComponents
+        var picked: [(relativePath: String, json: [String: Any])] = []
+        var skipped: Int = 0
+        for case let item as URL in enumerator {
+            let values: URLResourceValues = try item.resourceValues(forKeys: Set(keys))
+            if values.isDirectory == true { continue }
+            let components: [String] = item.standardizedFileURL.pathComponents
+            guard values.isRegularFile == true, components.count > rootComponents.count,
+                  Array(components.prefix(rootComponents.count)) == rootComponents else {
+                skipped += 1
+                continue
+            }
+            let segments: [String] = components.dropFirst(rootComponents.count).map { safeSegment($0, fallback: "file") }
+            let name: String = segments[segments.count - 1]
+            let copied: URL = directory.appendingPathComponent(UUID().uuidString + "-" + name)
+            try FileManager.default.copyItem(at: item, to: copied)
+            try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                                                 ofItemAtPath: copied.path)
+            let relativePath: String = ([folderName] + segments).joined(separator: "/")
+            var json: [String: Any] = ["uri": copied.absoluteString, "name": name, "relativePath": relativePath,
+                "mimeType": UTType(filenameExtension: item.pathExtension)?.preferredMIMEType ?? "application/octet-stream",
+                "size": values.fileSize ?? -1]
+            if let modified = values.contentModificationDate { json["lastModified"] = modified.timeIntervalSince1970 * 1000 }
+            picked.append((relativePath, json))
+        }
+        if let error = enumerationError { throw error }
+        let files: [[String: Any]] = picked.sorted { $0.relativePath < $1.relativePath }.map { $0.json }
+        return ["folderName": folderName, "files": files, "skippedCount": skipped]
     }
 }

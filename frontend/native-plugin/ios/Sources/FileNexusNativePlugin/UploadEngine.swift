@@ -99,8 +99,11 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
     func snapshots() -> [NativeUpload] { return jobs.sorted { $0.createdAt > $1.createdAt } }
 
     /// Copy a file before committing its job, so provider access may safely expire.
+    /// With `adopt`, the file is already an app-private picker copy and is moved instead,
+    /// so a picked file exists on disk once; the queue deletes it when the job ends.
     func enqueue(file: URL, name: String, mimeType: String, folderId: String?, source: String,
-                 relativePath: String? = nil, lastModified: Double? = nil, wifiOnly: Bool = false, backupKey: String? = nil, backupResourceCount: Int? = nil) throws -> String {
+                 relativePath: String? = nil, lastModified: Double? = nil, wifiOnly: Bool = false, backupKey: String? = nil, backupResourceCount: Int? = nil,
+                 adopt: Bool = false) throws -> String {
         if let key = backupKey, let existing = jobs.first(where: { $0.backupKey == key && $0.state != "cancelled" }) {
             return existing.jobId
         }
@@ -109,7 +112,7 @@ final class UploadEngine: NSObject, URLSessionTaskDelegate, URLSessionDelegate {
         guard !name.isEmpty, !name.contains("/"), !name.contains("\\"), name != ".", name != ".." else {
             throw NativeFailure("Upload filename must be a single nonempty path component", code: "INVALID_ARGUMENT")
         }
-        let copied: URL = try NativeStorage.copy(file, to: directory)
+        let copied: URL = try (adopt ? NativeStorage.move(file, to: directory) : NativeStorage.copy(file, to: directory))
         let attributes: [FileAttributeKey: Any] = try FileManager.default.attributesOfItem(atPath: copied.path)
         guard let size = attributes[.size] as? NSNumber else { throw NativeFailure("Cannot determine upload file size") }
         var job: NativeUpload = NativeUpload(jobId: UUID().uuidString, name: name, mimeType: mimeType,

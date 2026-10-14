@@ -19,6 +19,7 @@ import type {
   NativeInfo,
   PhotoBackupStatus,
   PickFilesResult,
+  PickFolderResult,
   RegisterPushResult,
 } from './definitions';
 
@@ -59,6 +60,11 @@ export class FileNexusNativeWeb extends WebPlugin implements FileNexusNativePlug
   /** Not available: browsers cannot hand out persistent file URIs. */
   async pickFiles(): Promise<PickFilesResult> {
     throw this.unavailable('pickFiles is only available in the native apps');
+  }
+
+  /** Not available: browsers use `<input webkitdirectory>` instead. */
+  async pickFolder(): Promise<PickFolderResult> {
+    throw this.unavailable('pickFolder is only available in the native apps');
   }
 
   /** Not available: the web app uploads through Uppy/TUS instead. */
