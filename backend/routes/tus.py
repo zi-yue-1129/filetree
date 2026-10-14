@@ -8,7 +8,6 @@ Enables refresh-resume and efficient direct-to-disk uploads.
 import base64
 import asyncio
 import weakref
-import hashlib
 import logging
 import os
 import secrets
@@ -20,6 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, 
 from fastapi.responses import Response
 from starlette.requests import ClientDisconnect
 from starlette.concurrency import run_in_threadpool
+from slowapi.util import get_remote_address
 
 from backend.config import settings
 from backend.core.auth import extract_bearer_token
@@ -29,7 +29,11 @@ from backend.services.device_service import device_service
 from backend.services.event_service import event_service
 from backend.services.file_service import file_service
 from backend.services.push_service import push_service
-from backend.services.token_service import token_service
+from backend.services.token_service import (
+    OWNER_TOKEN_TYPES,
+    hash_token,
+    token_service,
+)
 from backend.services.tus_metadata_store import TusMetadataStore
 from backend.services.upload_folder_service import (
     resolve_upload_folder,
@@ -197,7 +201,9 @@ async def create_tus_upload(
                     authenticated_token = token
 
         if not user and password:
-            user = await user_service.get_user_by_password(password)
+            user = await user_service.get_user_by_password(
+                password, client_key=get_remote_address(request)
+            )
 
         if not user:
             raise HTTPException(status_code=401, detail="驗證失敗")
@@ -215,9 +221,7 @@ async def create_tus_upload(
         if device is not None:
             metadata["device_id"] = device["id"]
         elif authenticated_token:
-            metadata["auth_token_hash"] = hashlib.sha256(
-                authenticated_token.encode()
-            ).hexdigest()
+            metadata["auth_token_hash"] = hash_token(authenticated_token)
         else:
             metadata["password_hash"] = user["hashed_password"]
 
@@ -315,12 +319,13 @@ async def _has_active_origin(upload: dict[str, Any]) -> bool:
         return device is not None and device["username"] == upload["username"]
     token_hash = stored.get("auth_token_hash")
     if token_hash:
-        for token in tuple(token_service.tokens):
-            if secrets.compare_digest(
-                hashlib.sha256(token.encode()).hexdigest(), token_hash
-            ):
-                if await token_service.resolves_owner(token, upload["username"]):
-                    return True
+        info = token_service.validate_hash(token_hash)
+        if (
+            info is not None
+            and info.token_type in OWNER_TOKEN_TYPES
+            and info.username == upload["username"]
+        ):
+            return True
     user = await user_service.get_user_by_name(upload["username"])
     password_hash = stored.get("password_hash")
     if (

@@ -12,25 +12,37 @@
       content="Secure, high-speed file management system with end-to-end encryption and R2 acceleration."
     />
 
-    <!-- Open Graph (Facebook, Line, Discord) -->
+    <!--
+      Open Graph (Facebook, LINE, Discord). og:image is relative here; when
+      VITE_SITE_URL is set at build time, vite.config.ts rewrites it to an
+      absolute URL and adds og:url. The backend /share/<token> handler
+      replaces title/description/image/type per file via regex, so keep each
+      of those as a single tag.
+    -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FileNexus" />
     <meta property="og:title" content="FileNexus - File Management Hub" />
     <meta
       property="og:description"
       content="Securely store and share your files with FileNexus. Features R2 acceleration and military-grade encryption."
     />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image" content="/og-card.jpg" />
 
-    <!-- Twitter Card -->
+    <!-- Twitter/X card: title, description and image fall back to og:* -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="FileNexus" />
-    <meta
-      name="twitter:description"
-      content="Secure, high-speed file management system."
-    />
 
     <!-- Mobile Theme Color -->
     <meta name="theme-color" content="#020205" />
+
+    <!-- Apply a stored effects level (e.g. plain 極簡) before the first paint; see src/lib/effects.ts -->
+    <script>
+      try {
+        var storedEffects = localStorage.getItem('filenexus-effects');
+        if (/^(full|low|plain)$/.test(storedEffects)) document.documentElement.dataset.effects = storedEffects;
+      } catch (error) {
+        console.error('Could not read the stored effects level', error);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

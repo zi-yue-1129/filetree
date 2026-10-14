@@ -1,14 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-type Theme = 'light' | 'dark';
-
-interface ThemeContextType {
-  theme: Theme;
-  toggleTheme: () => void;
-  setTheme: (theme: Theme) => void;
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+import React, { useEffect, useState } from 'react';
+import { ThemeContext, type Theme } from './themeContextValue';
 
 const STORAGE_KEY = 'filenexus-theme';
 
@@ -97,20 +88,3 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     </ThemeContext.Provider>
   );
 };
-
-/**
- * Hook to access the theme context.
- *
- * Returns:
- *   Theme context value with theme state and control functions.
- *
- * Raises:
- *   Error if used outside of ThemeProvider.
- */
-export function useTheme(): ThemeContextType {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-}

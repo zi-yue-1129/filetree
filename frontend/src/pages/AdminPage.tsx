@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { ShieldAlert, Terminal, Activity, UserPlus, ChevronLeft, ShieldCheck, KeyRound, Save, X, Edit3, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { NotFoundPage } from './NotFoundPage';
@@ -320,7 +320,7 @@ export const AdminPage: React.FC = () => {
   if (!isAuthorized) {
     return (
       <div className="relative min-h-screen flex items-center justify-center p-4 bg-transparent">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="glass-card-premium p-12 w-full max-w-md space-y-8 relative z-10 rounded-3xl"
@@ -349,7 +349,7 @@ export const AdminPage: React.FC = () => {
               {status.msg}
             </p>
           )}
-        </motion.div>
+        </m.div>
       </div>
     );
   }
@@ -375,7 +375,7 @@ export const AdminPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-[clamp(1rem,3vw,3rem)] relative z-10 max-w-10xl mx-auto">
         <div className="lg:col-span-8 xl:col-span-9 space-y-[clamp(1rem,2.5vh,2.5rem)]">
           {/* Create User Form Section */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             className="glass-card p-[clamp(1.25rem,3.5vw,3rem)] space-y-[clamp(1.25rem,3.5vh,2.5rem)] relative overflow-hidden group"
@@ -423,7 +423,7 @@ export const AdminPage: React.FC = () => {
 
             <AnimatePresence>
               {status && (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.98 }}
@@ -432,10 +432,10 @@ export const AdminPage: React.FC = () => {
                 >
                   <Activity className={cn("w-4 h-4 sm:w-5 sm:h-5", status.type === 'error' ? "text-red-400" : "text-green-400 animate-pulse")} />
                   {status.msg}
-                </motion.div>
+                </m.div>
               )}
             </AnimatePresence>
-          </motion.div>
+          </m.div>
 
           {/* Tab Navigation */}
           <div className="flex gap-4 mb-6">
@@ -461,7 +461,7 @@ export const AdminPage: React.FC = () => {
 
           <AnimatePresence mode="wait">
             {activeTab === 'users' ? (
-              <motion.div
+              <m.div
                 key="users-tab"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -645,9 +645,9 @@ export const AdminPage: React.FC = () => {
                     </table>
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             ) : (
-              <motion.div
+              <m.div
                 key="logs-tab"
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -708,7 +708,7 @@ export const AdminPage: React.FC = () => {
                     </table>
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
         </div >
@@ -718,7 +718,7 @@ export const AdminPage: React.FC = () => {
           {/* R2 Usage Widget */}
 
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
@@ -739,9 +739,9 @@ export const AdminPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </m.div>
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
@@ -764,7 +764,7 @@ export const AdminPage: React.FC = () => {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </m.div>
         </div >
       </div >
     </div >

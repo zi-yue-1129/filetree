@@ -14,7 +14,7 @@ from backend.config import settings
 from backend.core.auth import get_current_user_token, verify_ownership
 from backend.services.database import get_files_db, get_users_db, init_db
 from backend.services.event_service import event_service
-from backend.services.token_service import token_service
+from backend.services.token_service import hash_token, token_service
 from backend.services.user_service import user_service
 
 
@@ -560,7 +560,7 @@ def test_tus_replaces_expired_origin_resume(
     original = client.post("/api/upload/tus", headers=fields)
     assert original.status_code == 201
     if origin == "session":
-        token_service.tokens[first_session].expiry = datetime(2000, 1, 1)
+        token_service.tokens[hash_token(first_session)].expiry = datetime(2000, 1, 1)
     else:
         assert client.portal.call(
             user_service.reset_password,

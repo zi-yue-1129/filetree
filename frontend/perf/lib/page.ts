@@ -5,7 +5,7 @@
 import type { Browser, BrowserContext, CDPSession, Page } from 'playwright';
 
 /** Effects preference written to localStorage before the app boots. */
-export type EffectsSetting = 'auto' | 'full' | 'low';
+export type EffectsSetting = 'auto' | 'full' | 'low' | 'plain';
 
 /** Options describing the emulated device. */
 export interface DeviceOptions {

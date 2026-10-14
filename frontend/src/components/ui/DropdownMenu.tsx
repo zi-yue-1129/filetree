@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { cn } from '../../lib/utils';
 
 export interface DropdownItem {
@@ -75,7 +75,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
   const menuContent = (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, scale: 0.95, y: -10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -128,7 +128,7 @@ export const DropdownMenu: React.FC<DropdownMenuProps> = ({
               </React.Fragment>
             ))}
           </div>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

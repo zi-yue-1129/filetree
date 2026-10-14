@@ -1,12 +1,25 @@
 """
-Sharing service for temporary download tokens.
+Session, access and share tokens.
+
+Tokens are cached in memory (keyed by their SHA-256 hash) for fast validation
+and written through to the ``auth_tokens`` table in users.db, so logins and
+share links survive a backend restart. Plaintext tokens are never stored.
 """
 
+import hashlib
+import logging
+import sqlite3
+from contextlib import closing
 import secrets
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Dict, Iterable, Optional
 
 from pydantic import BaseModel
+
+from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 SHARE_TOKEN_TYPE = "share"
 # Token types that authenticate the account owner (login sessions).
@@ -22,17 +35,116 @@ class TokenInfo(BaseModel):
     token_type: str = "share"  # 'share', 'access', or 'session'
 
 
+def hash_token(token: str) -> str:
+    """Return the SHA-256 hex digest used to index and persist a token.
+
+    Args:
+        token: Plaintext bearer token.
+
+    Returns:
+        Lowercase hex digest of the UTF-8 encoded token.
+    """
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 class TokenService:
     """Service for generating and validating tokens."""
 
-    def __init__(self, expiry_hours: int = 24) -> None:
+    def __init__(self, expiry_hours: int = 24, db_path: Optional[Path] = None) -> None:
         """Initialize the service.
 
         Args:
-            expiry_hours: How long tokens remain valid.
+            expiry_hours: How long share tokens remain valid.
+            db_path: SQLite file holding ``auth_tokens``; defaults to users.db.
         """
         self.expiry_hours = expiry_hours
+        self._db_path = db_path
+        # Keyed by hash_token(token), never by the plaintext token.
         self.tokens: Dict[str, TokenInfo] = {}
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open a short-lived connection to the token database.
+
+        Token writes only happen on login and share creation, so a blocking
+        connection per write keeps the synchronous API without a worker pool.
+
+        Returns:
+            An open sqlite3 connection (caller closes it).
+        """
+        path = self._db_path or settings.paths.users_db
+        return sqlite3.connect(str(path), timeout=15)
+
+    def load(self) -> int:
+        """Restore unexpired tokens from the database and purge expired rows.
+
+        Must run after ``init_db`` created the ``auth_tokens`` table.
+
+        Returns:
+            Number of tokens restored into memory.
+        """
+        now = datetime.now()
+        with closing(self._connect()) as conn, conn:
+            conn.execute(
+                "DELETE FROM auth_tokens WHERE expires_at <= ?", (now.isoformat(),)
+            )
+            rows = conn.execute(
+                "SELECT token_hash, username, filename, token_type, expires_at "
+                "FROM auth_tokens"
+            ).fetchall()
+        for token_hash, username, filename, token_type, expires_at in rows:
+            self.tokens[token_hash] = TokenInfo(
+                username=username,
+                filename=filename,
+                expiry=datetime.fromisoformat(expires_at),
+                token_type=token_type,
+            )
+        logger.info("Restored %d auth tokens from the database.", len(rows))
+        return len(rows)
+
+    def _issue(self, token: str, info: TokenInfo) -> str:
+        """Cache and persist a newly generated token.
+
+        Args:
+            token: Plaintext token returned to the caller.
+            info: Metadata describing the token.
+
+        Returns:
+            The plaintext token.
+        """
+        token_hash = hash_token(token)
+        with closing(self._connect()) as conn, conn:
+            conn.execute(
+                "INSERT INTO auth_tokens "
+                "(token_hash, username, filename, token_type, expires_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    token_hash,
+                    info.username,
+                    info.filename,
+                    info.token_type,
+                    info.expiry.isoformat(),
+                ),
+            )
+        self.tokens[token_hash] = info
+        self._cleanup()
+        return token
+
+    def _forget(self, token_hashes: Iterable[str]) -> None:
+        """Drop tokens from memory and the database.
+
+        Args:
+            token_hashes: Hashes of the tokens to remove.
+        """
+        hashes = list(token_hashes)
+        if not hashes:
+            return
+        with closing(self._connect()) as conn, conn:
+            conn.executemany(
+                "DELETE FROM auth_tokens WHERE token_hash = ?",
+                [(token_hash,) for token_hash in hashes],
+            )
+        for token_hash in hashes:
+            self.tokens.pop(token_hash, None)
 
     def create_token(self, username: str, filename: str) -> str:
         """Create a new sharing token for a specific file.
@@ -44,13 +156,13 @@ class TokenService:
         Returns:
             A unique token string.
         """
-        token = secrets.token_urlsafe(32)
         expiry = datetime.now() + timedelta(hours=self.expiry_hours)
-        self.tokens[token] = TokenInfo(
-            username=username, filename=filename, expiry=expiry, token_type="share"
+        return self._issue(
+            secrets.token_urlsafe(32),
+            TokenInfo(
+                username=username, filename=filename, expiry=expiry, token_type="share"
+            ),
         )
-        self._cleanup()
-        return token
 
     def create_access_token(self, username: str) -> str:
         """Create a general access token for a user session (legacy compatibility).
@@ -61,14 +173,11 @@ class TokenService:
         Returns:
             A unique token string.
         """
-        token = secrets.token_urlsafe(32)
-        # Use longer expiry for sessions to improve convenience
         expiry = datetime.now() + timedelta(hours=72)
-        self.tokens[token] = TokenInfo(
-            username=username, expiry=expiry, token_type="access"
+        return self._issue(
+            secrets.token_urlsafe(32),
+            TokenInfo(username=username, expiry=expiry, token_type="access"),
         )
-        self._cleanup()
-        return token
 
     def create_session_token(self, username: str) -> str:
         """Create a persistent session token for a user.
@@ -79,13 +188,11 @@ class TokenService:
         Returns:
             A unique session token string.
         """
-        token = secrets.token_urlsafe(64)
         expiry = datetime.now() + timedelta(hours=72)  # 3 days of convenience
-        self.tokens[token] = TokenInfo(
-            username=username, expiry=expiry, token_type="session"
+        return self._issue(
+            secrets.token_urlsafe(64),
+            TokenInfo(username=username, expiry=expiry, token_type="session"),
         )
-        self._cleanup()
-        return token
 
     def validate_token(self, token: str) -> Optional[TokenInfo]:
         """Check if a token is valid and not expired.
@@ -98,15 +205,23 @@ class TokenService:
         """
         if not token:
             return None
+        return self.validate_hash(hash_token(token))
 
-        info = self.tokens.get(token)
-        if not info:
+    def validate_hash(self, token_hash: str) -> Optional[TokenInfo]:
+        """Validate a token by its SHA-256 hash (for stored upload origins).
+
+        Args:
+            token_hash: Output of ``hash_token`` for the original token.
+
+        Returns:
+            TokenInfo if the token is known and unexpired, None otherwise.
+        """
+        info = self.tokens.get(token_hash)
+        if info is None:
             return None
-
         if datetime.now() > info.expiry:
-            del self.tokens[token]
+            self._forget([token_hash])
             return None
-
         return info
 
     def owner_username(self, token: Optional[str]) -> Optional[str]:
@@ -233,12 +348,9 @@ class TokenService:
         )
 
     def _cleanup(self) -> None:
-        """Remove expired tokens from memory."""
+        """Remove expired tokens from memory and the database."""
         now = datetime.now()
-        # Create a list of keys to delete to avoid dictionary size change during iteration
-        expired = [t for t, info in self.tokens.items() if now > info.expiry]
-        for t in expired:
-            del self.tokens[t]
+        self._forget([h for h, info in self.tokens.items() if now > info.expiry])
 
 
 # Singleton instance

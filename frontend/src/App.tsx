@@ -9,18 +9,24 @@ const ShortcutPage = React.lazy(() => import('./pages/ShortcutPage').then(module
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(module => ({ default: module.NotFoundPage })));
 const SharePage = React.lazy(() => import('./pages/SharePage').then(module => ({ default: module.SharePage })));
 const SettingsPage = React.lazy(() => import('./native/settings/SettingsPage').then(module => ({ default: module.SettingsPage })));
-import { Starfield } from './components/Starfield';
-import { AuraField } from './components/AuraField';
+// Canvas backgrounds are split so only the active theme's one is downloaded
+// (and plain mode downloads neither); the CSS body background shows until it loads.
+const Starfield = React.lazy(() => import('./components/Starfield').then(module => ({ default: module.Starfield })));
+const AuraField = React.lazy(() => import('./components/AuraField').then(module => ({ default: module.AuraField })));
+// Native-only startup tasks (update checks, Capgo updater) are never needed on the web.
+const NativeBootstrap = React.lazy(() => import('./native/NativeBootstrap').then(module => ({ default: module.NativeBootstrap })));
 import { Sidebar } from './components/Sidebar';
 import { PublicDirectory } from './components/PublicDirectory';
-import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { useTheme } from './hooks/useTheme';
 import { EffectsProvider } from './contexts/EffectsContext';
 import { useEffects } from './hooks/useEffects';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { apiRequest, wsUrl as buildWsUrl } from './services/api';
 import { cn } from './lib/utils';
-import { NativeBootstrap } from './native/NativeBootstrap';
 import { isMobileNative } from './native';
+import { AppLinkNavigator } from './native/AppLinkNavigator';
 
 interface UserData {
   users?: Array<{ username: string; folder: string }>;
@@ -39,6 +45,19 @@ interface UserData {
   urls?: Array<{ url: string; created: string; is_locked?: boolean }>;
   error?: string;
 }
+
+/**
+ * Placeholder shown in the main pane while page data or a page chunk loads.
+ *
+ * @returns The loading indicator.
+ */
+const PageLoadingIndicator: React.FC = () => (
+  <div className="flex-1 flex items-center justify-center">
+    <div className="text-quantum-cyan animate-pulse tracking-[0.4em] font-bold text-xs uppercase">
+      正在載入系統...
+    </div>
+  </div>
+);
 
 // Main content wrapper that handles data fetching based on route
 const MainContent: React.FC<{
@@ -80,13 +99,7 @@ const MainContent: React.FC<{
   }, [username, token]);
 
   if (loading || userLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-quantum-cyan animate-pulse tracking-[0.4em] font-bold text-xs uppercase">
-          正在載入系統...
-        </div>
-      </div>
-    );
+    return <PageLoadingIndicator />;
   }
 
   // Home page - show upload center
@@ -197,12 +210,18 @@ const MainLayout: React.FC<{
             ? "overflow-hidden" 
             : "custom-scrollbar overflow-y-auto"
         )}>
-          <MainContent 
-            users={users} 
-            config={config} 
-            loading={loading} 
-            onOpenDirectory={() => setDirectoryOpen(true)}
-          />
+          {/* Lazy pages suspend only this boundary. With the outer boundary in
+              AppContent the first visit to a page chunk hid the whole layout,
+              including the drawers mid-exit-animation: their framer-motion
+              backdrop never finished exiting and fogged the page. */}
+          <React.Suspense fallback={<PageLoadingIndicator />}>
+            <MainContent
+              users={users}
+              config={config}
+              loading={loading}
+              onOpenDirectory={() => setDirectoryOpen(true)}
+            />
+          </React.Suspense>
         </main>
 
         {/* Right Sidebar - Public Directory */}
@@ -268,10 +287,22 @@ const AppContent: React.FC = () => {
 
   return (
     <BrowserRouter>
-      {isMobileNative() && <NativeBootstrap />}
+      {isMobileNative() && (
+        <>
+          {/* Eager: App Links must be routed even before lazy chunks load. */}
+          <AppLinkNavigator />
+          <React.Suspense fallback={null}>
+            <NativeBootstrap />
+          </React.Suspense>
+        </>
+      )}
       <div className="min-h-screen relative text-gray-900 dark:text-white/90 selection:bg-quantum-cyan/30">
         {/* Background Layer - Dynamic based on theme */}
-        {theme === 'dark' ? <Starfield animated={effectsLevel === 'full'} /> : <AuraField animated={effectsLevel === 'full'} />}
+        {effectsLevel !== 'plain' && (
+          <React.Suspense fallback={null}>
+            {theme === 'dark' ? <Starfield animated={effectsLevel === 'full'} /> : <AuraField animated={effectsLevel === 'full'} />}
+          </React.Suspense>
+        )}
 
         <React.Suspense fallback={
            <div className="flex items-center justify-center min-h-screen">

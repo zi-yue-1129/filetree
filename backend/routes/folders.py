@@ -5,9 +5,10 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Any, Optional
 
-from fastapi import APIRouter, Form, Header, HTTPException
+from fastapi import APIRouter, Form, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
+from slowapi.util import get_remote_address
 
 from backend.core.auth import extract_bearer_token
 from backend.services.archive_service import create_archive
@@ -22,6 +23,7 @@ router = APIRouter()
 
 @router.post("/user/{username}/folders")
 async def create_folder(
+    request: Request,
     username: str,
     name: str = Form(...),
     folder_type: str = Form(...),
@@ -33,6 +35,7 @@ async def create_folder(
     """Create a new folder for files or URLs.
 
     Args:
+        request: Incoming HTTP request.
         username: Target account username.
         name: Folder display name.
         folder_type: File or URL folder type.
@@ -54,7 +57,9 @@ async def create_folder(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 
@@ -87,6 +92,7 @@ async def create_folder(
 
 @router.post("/user/{username}/folders/{folder_id}/update")
 async def update_folder(
+    request: Request,
     username: str,
     folder_id: str,
     name: str = Form(...),
@@ -97,6 +103,7 @@ async def update_folder(
     """Update a folder name.
 
     Args:
+        request: Incoming HTTP request.
         username: Target account username.
         folder_id: Target folder identifier.
         name: Folder display name.
@@ -117,7 +124,9 @@ async def update_folder(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 
@@ -146,6 +155,7 @@ async def update_folder(
 
 @router.post("/user/{username}/folders/{folder_id}/delete")
 async def delete_folder(
+    request: Request,
     username: str,
     folder_id: str,
     token: Optional[str] = Form(None),
@@ -155,6 +165,7 @@ async def delete_folder(
     """Delete a folder and its physical content.
 
     Args:
+        request: Incoming HTTP request.
         username: Target account username.
         folder_id: Target folder identifier.
         token: Caller credential or scoped file capability, where supported.
@@ -174,7 +185,9 @@ async def delete_folder(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 
@@ -199,6 +212,7 @@ async def delete_folder(
 
 @router.post("/user/{username}/move-item")
 async def move_item(
+    request: Request,
     username: str,
     item_type: str = Form(...),
     item_id: str = Form(...),
@@ -210,6 +224,7 @@ async def move_item(
     """Move an item (file, url, or folder) to a folder.
 
     Args:
+        request: Incoming HTTP request.
         username: Target account username.
         item_type: File, URL, or folder item type.
         item_id: Item identifier.
@@ -231,7 +246,9 @@ async def move_item(
     if await token_service.resolves_owner(token, username):
         auth_success = True
     elif password:
-        p_user = await user_service.get_user_by_password(password)
+        p_user = await user_service.get_user_by_password(
+            password, client_key=get_remote_address(request)
+        )
         if p_user and p_user["username"] == username:
             auth_success = True
 

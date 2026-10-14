@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Download, FileText, Loader2, AlertCircle, Share2, Clock, HardDrive } from 'lucide-react';
 import { FilePreviewContent } from '../components/FilePreviewModal';
 import { cn } from '../lib/utils';
@@ -123,7 +123,7 @@ export const SharePage: React.FC = () => {
 
         {/* Info Area */}
         <div className="w-full md:w-80 flex flex-col gap-6 shrink-0">
-          <motion.div 
+          <m.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             className="bg-white/5 p-6 rounded-3xl border border-white/10 backdrop-blur-md"
@@ -184,7 +184,7 @@ export const SharePage: React.FC = () => {
             <p className="mt-4 text-[0.6rem] text-center text-white/20 italic">
               使用 SSL 端對端加密傳輸技術
             </p>
-          </motion.div>
+          </m.div>
 
           </div>
       </main>

@@ -2,7 +2,6 @@ package cc.spkuan.filenexus.nativeplugin
 
 import java.io.IOException
 import java.io.InputStream
-import java.util.Base64
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType
@@ -12,6 +11,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSink
+import okio.ByteString.Companion.encodeUtf8
 
 /**
  * HTTP error from the TUS server.
@@ -229,13 +229,19 @@ class TusClient(private val http: OkHttpClient, serverUrl: String) {
         /**
          * Encode TUS `Upload-Metadata` (`key base64(value)` pairs, comma-separated).
          *
+         * Values are UTF-8 encoded, then base64-encoded with Okio's RFC 4648
+         * standard alphabet, `=` padding and no line wraps, i.e. the same output as
+         * `java.util.Base64.getEncoder()`. Okio is used because `java.util.Base64`
+         * needs API 26 (minSdk is 24) and `android.util.Base64` is an unimplemented
+         * stub in JVM unit tests; Okio is pure Kotlin and already ships with OkHttp.
+         *
          * @param metadata Keys must not contain spaces or commas.
          * @return Header value.
          */
         fun encodeMetadata(metadata: Map<String, String>): String =
             metadata.entries.joinToString(",") { (key, value) ->
                 require(key.isNotEmpty() && key.none { it == ' ' || it == ',' }) { "Invalid TUS metadata key: $key" }
-                "$key ${Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))}"
+                "$key ${value.encodeUtf8().base64()}"
             }
 
         /**

@@ -68,3 +68,4 @@ logs/
 
 # --- Agentic ---
 .agent/
+backups/

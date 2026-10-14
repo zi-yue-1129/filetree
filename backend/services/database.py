@@ -51,6 +51,16 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
 
+-- Session/access/share tokens; only SHA-256 hashes are stored.
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    token_hash TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    filename TEXT,
+    token_type TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires_at ON auth_tokens(expires_at);
+
 CREATE TABLE IF NOT EXISTS folders (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,

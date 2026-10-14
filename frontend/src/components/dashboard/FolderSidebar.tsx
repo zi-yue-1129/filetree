@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { 
   Folder as FolderIcon, 
   FolderPlus, 
@@ -225,7 +225,7 @@ const FolderTreeItem: React.FC<{
 
       <AnimatePresence>
         {isExpanded && hasSubfolders && (
-          <motion.div
+          <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -247,7 +247,7 @@ const FolderTreeItem: React.FC<{
                 isDesktop={isDesktop}
               />
             ))}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
@@ -350,7 +350,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
         </AnimatePresence>
 
         {isAdding.active && (
-          <motion.div 
+          <m.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="p-2 space-y-2 border border-cyan-500/30 rounded-xl bg-cyan-500/5 mt-2"
@@ -380,7 +380,7 @@ export const FolderSidebar: React.FC<FolderSidebarProps> = ({
                 取消
               </button>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </div>
     </div>

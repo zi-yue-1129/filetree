@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { Lock, Unlock, Download, Trash2 } from 'lucide-react';
 import { CascadingMenu } from '../ui/CascadingMenu';
 import { cn } from '../../lib/utils';
@@ -81,7 +81,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       {(mode === 'both' || mode === 'mobile') && (
         /* Mobile View (< md) - Bottom Floating Bar */
         <AnimatePresence>
-        <motion.div
+        <m.div
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
@@ -155,7 +155,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               />
             )}
           </div>
-        </motion.div>
+        </m.div>
       </AnimatePresence>
     )}
   </>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 import { Smartphone, Copy, Check, Download, ShieldCheck, AlertTriangle, Share2 } from 'lucide-react';
 import { apiUrl } from '../services/api';
 
@@ -77,7 +77,7 @@ export const ShortcutPage: React.FC = () => {
     <div className="relative min-h-[calc(100vh-8rem)] overflow-x-hidden custom-scrollbar">
       <div className="absolute top-1/4 -right-20 w-[50vw] h-[40vh] fx-glow text-quantum-cyan/5 -z-10" />
 
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
+      <m.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
         <div className="flex items-center justify-center gap-4 mb-4">
           <div className="p-3 bg-quantum-cyan/10 rounded-2xl border border-quantum-cyan/20">
             <Smartphone className="w-8 h-8 text-cyan-600 dark:text-quantum-cyan" />
@@ -87,7 +87,7 @@ export const ShortcutPage: React.FC = () => {
           </h1>
         </div>
         <p className="text-sm text-gray-500 dark:text-white/50">從任何 App 的分享選單，一鍵上傳檔案到 FileNexus</p>
-      </motion.div>
+      </m.div>
 
       <div className="max-w-3xl mx-auto space-y-6 pb-20">
         {ICLOUD_SHORTCUT_URL && (

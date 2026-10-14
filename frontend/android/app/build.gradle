@@ -9,6 +9,16 @@ if (!versionMatcher.matches()) {
 }
 def appVersionCode = versionMatcher[0][1].toInteger() * 10000 + versionMatcher[0][2].toInteger() * 100 + versionMatcher[0][3].toInteger()
 
+// Public web origin whose links open in the app (Android App Links). CI passes
+// -PsiteUrl=$VITE_SITE_URL; the host must serve /.well-known/assetlinks.json
+// (frontend/public/.well-known/assetlinks.json on Cloudflare Pages).
+def siteUrl = (project.findProperty('siteUrl') ?: 'https://99.spkuan.cc').toString()
+def siteUri = new URI(siteUrl)
+if (siteUri.scheme != 'https' || !siteUri.host || siteUri.port != -1 || !(siteUri.path in [null, '', '/'])) {
+    throw new GradleException("siteUrl must be an https origin without port or path, got '${siteUrl}'")
+}
+def appLinkHost = siteUri.host
+
 // Release signing from environment (CI secrets). Without ANDROID_KEYSTORE_FILE
 // assembleRelease yields an unsigned APK; the CI release job refuses to run then.
 def releaseKeystore = System.getenv('ANDROID_KEYSTORE_FILE')
@@ -22,6 +32,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode
         versionName appVersion
+        manifestPlaceholders = [appLinkHost: appLinkHost]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
