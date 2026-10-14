@@ -148,7 +148,10 @@ Signing secrets (GitHub Actions secrets; never commit keys):
 `ANDROID_KEY_PASSWORD`, `TAURI_SIGNING_PRIVATE_KEY`,
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (all already set). Repo variables:
 `VITE_API_BASE_URL` (production API URL, currently
-`https://api-filetree.spkuan.cc`) and `TAURI_UPDATER_PUBKEY` (the Tauri
+`https://api-filetree.spkuan.cc`), `VITE_SITE_URL` (public web frontend
+origin, currently `https://99.spkuan.cc`; share/folder links copied in the
+apps point there, its host is the Android App Links host, and every native
+build job fails when it is missing) and `TAURI_UPDATER_PUBKEY` (the Tauri
 updater public key; inject it into `tauri.conf.json` `plugins.updater.pubkey`
 at build time). Private keys live only on the owner's machine in
 `~/.config/filenexus-release/` and in GitHub secrets.
@@ -162,6 +165,35 @@ artifacts only). `release.yml` (integrator) runs on tag `v*`: creates the
 release once, then calls every `build-*.yml`, which upload assets with
 `gh release upload <tag> ... --clobber`. Pin every third-party action to a
 full version tag.
+
+### Share links and Android App Links
+
+Links the apps copy or show as QR codes (`/share/<token>`, `/<user>?tab=&folder=`)
+are built by `publicSiteOrigin()` (`frontend/src/services/publicSite.ts`):
+
+- web: the page origin (Pages, previews and the backend-served SPA keep working);
+- native, server URL overridden in Settings (mobile Preferences / desktop store):
+  that server's origin, on the assumption that a self-hosted backend serves the
+  SPA itself (the build-time site cannot resolve another server's tokens);
+- native, default server: build-time `VITE_SITE_URL`. When it is missing the
+  copy/QR action shows an error instead of producing a `localhost` link.
+
+Android App Links: `AndroidManifest.xml` claims every `https://<host>/...` path
+(`autoVerify`), where `<host>` comes from the Gradle property `siteUrl`
+(CI passes `-PsiteUrl=$VITE_SITE_URL`; default `https://99.spkuan.cc`). The
+claim is verified against `frontend/public/.well-known/assetlinks.json`
+(served by Pages) holding the package name and the SHA-256 of the release
+signing certificate. **If the release keystore ever changes, add the new
+fingerprint there before shipping the APK.** The web app routes such links via
+`frontend/src/native/appLinks.ts`: `App.getLaunchUrl()` before the first render
+(cold start, not replayed on reloads) and the `appUrlOpen` event while running;
+links to other hosts are ignored. Check verification on a device with
+`adb shell pm get-app-links cc.spkuan.filenexus` (expect `verified`).
+
+iOS Universal Links are a follow-up: they need the Apple team ID in
+`/.well-known/apple-app-site-association` and an Associated Domains
+entitlement (`applinks:<host>`), which free-account SideStore builds cannot
+use reliably.
 
 ## 5. Native features (mobile)
 

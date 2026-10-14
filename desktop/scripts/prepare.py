@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 from urllib.parse import urlsplit
 
 
@@ -23,6 +24,16 @@ def main() -> None:
     if (parsed.scheme not in {"http", "https"} or not parsed.netloc
             or parsed.path or parsed.query or parsed.fragment or parsed.username):
         raise ValueError("VITE_API_BASE_URL must be an HTTP(S) origin without a path or trailing slash")
+    site_url = os.environ.get("VITE_SITE_URL", "")
+    if not site_url:
+        if release:
+            raise ValueError("Release requires repository variable VITE_SITE_URL (public web origin for share links)")
+        # GitHub Actions workflow command (annotation), not a log message.
+        sys.stdout.write("::warning::VITE_SITE_URL is absent; copying share links in this test app shows an error.\n")
+    else:
+        parsed_site = urlsplit(site_url)
+        if parsed_site.scheme not in {"http", "https"} or not parsed_site.netloc:
+            raise ValueError("VITE_SITE_URL must be an absolute HTTP(S) URL")
     private_key = os.environ.get("TAURI_SIGNING_PRIVATE_KEY", "")
     public_key = os.environ.get("TAURI_UPDATER_PUBKEY", "").strip()
     if release and not private_key:

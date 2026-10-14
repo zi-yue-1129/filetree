@@ -8,12 +8,14 @@ from fastapi import APIRouter, Form, Header, HTTPException, Request
 from fastapi.responses import Response
 
 from backend.config import settings
-from backend.core.auth import extract_bearer_token, verify_password
+from backend.core.auth import extract_bearer_token
+from backend.core.rate_limit import LOGIN_LIMIT, limiter
 from backend.core.utils import get_client_ip
 from backend.services.audit_service import AuditService
 from backend.services.event_service import event_service
 from backend.services.file_service import file_service
 from backend.services.note_service import note_service
+from backend.services.password_lookup import verify_password_async
 from backend.services.token_service import token_service
 from backend.services.user_service import user_service
 
@@ -92,6 +94,7 @@ async def get_user_dashboard(
 
 
 @router.post("/user/change-password")
+@limiter.limit(LOGIN_LIMIT)
 async def change_password(
     request: Request,
     username: str = Form(...),
@@ -113,7 +116,7 @@ async def change_password(
     if not user:
         raise HTTPException(status_code=404, detail="使用者不存在")
 
-    if not verify_password(old_password, user["salt"], user["hashed_password"]):
+    if not await verify_password_async(old_password, user["salt"], user["hashed_password"]):
         raise HTTPException(status_code=401, detail="舊密碼錯誤")
 
     success = await user_service.reset_password(username, new_password)
@@ -168,7 +171,7 @@ async def update_own_profile(
     if await token_service.resolves_owner(session_token, username):
         auth_success = True
     elif password:
-        if verify_password(password, user["salt"], user["hashed_password"]):
+        if await verify_password_async(password, user["salt"], user["hashed_password"]):
             auth_success = True
 
     if not auth_success:
@@ -225,7 +228,7 @@ async def toggle_item_lock(
     if await token_service.resolves_owner(session_token, username):
         auth_success = True
     elif password:
-        if verify_password(password, user["salt"], user["hashed_password"]):
+        if await verify_password_async(password, user["salt"], user["hashed_password"]):
             auth_success = True
 
     if not auth_success:

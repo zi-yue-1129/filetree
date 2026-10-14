@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { X, Download, FileText, Loader2, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getFileType } from '../lib/file-utils';
+import { API_ORIGIN } from '../services/api';
 
 interface FilePreviewModalProps {
   isOpen: boolean;
@@ -127,8 +128,12 @@ export const FilePreviewContent: React.FC<{
       );
     }
     case 'office': {
-      const fullUrl = file.url.startsWith('http') ? file.url : window.location.origin + file.url;
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      // File URLs are backend URLs (absolute API_ORIGIN ones in practice).
+      // Office Online must reach the file itself, so judge the file's host,
+      // not the page's: inside the native apps the page is always "localhost".
+      const fullUrl = new URL(file.url, `${API_ORIGIN}/`).href;
+      const fileHost = new URL(fullUrl).hostname;
+      const isLocal = fileHost === 'localhost' || fileHost === '127.0.0.1';
       const sizeInMB = parseFloat(file.size.split(' ')[0]);
       const isTooLarge = file.size.includes('GB') || (file.size.includes('MB') && sizeInMB > 25);
 
@@ -223,7 +228,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
     <AnimatePresence>
       {isOpen && file && (
         <div className="fixed inset-0 z-150 flex items-center justify-center p-4 sm:p-6">
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -231,7 +236,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
             className="absolute inset-0 bg-space-black/95 backdrop-blur-xl"
           />
 
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -291,7 +296,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onCl
               />
             </div>
 
-          </motion.div>
+          </m.div>
         </div>
       )}
     </AnimatePresence>

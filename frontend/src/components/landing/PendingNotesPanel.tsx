@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import { Terminal, Zap, X } from 'lucide-react';
 
 interface PendingNotesPanelProps {
@@ -23,7 +23,7 @@ const PendingNotesPanelView: React.FC<PendingNotesPanelProps> = ({
       <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1 relative z-10 min-h-25">
         <AnimatePresence mode="popLayout">
           {pendingNotes.length === 0 ? (
-            <motion.div
+            <m.div
               key="empty-notes"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -38,10 +38,10 @@ const PendingNotesPanelView: React.FC<PendingNotesPanelProps> = ({
                 <br />
                 並按 Enter
               </p>
-            </motion.div>
+            </m.div>
           ) : (
             pendingNotes.map((note, idx) => (
-              <motion.div
+              <m.div
                 key={`${idx}-${note.substring(0, 10)}`}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -61,7 +61,7 @@ const PendingNotesPanelView: React.FC<PendingNotesPanelProps> = ({
                     <X className="w-4 h-4 lg:w-3.5 lg:h-3.5" />
                   </button>
                 </div>
-              </motion.div>
+              </m.div>
             ))
           )}
         </AnimatePresence>

@@ -96,8 +96,7 @@ class UploadQueueWorker(context: Context, params: WorkerParameters) : CoroutineW
         if (UploadQueue.cancelledJobIds.contains(jobId)) return Outcome.CANCELLED
         var job = store.update(jobId, state = UploadState.UPLOADING, clearError = true) ?: return Outcome.CANCELLED
         NativeEvents.emitUploadProgress(job)
-        val queuePosition = "${store.all().count { it.state.isFinal.not() && it.wifiOnly == wifiOnly }} 個待上傳"
-        var lastReport = 0L
+        val throttle = ProgressThrottle()
         try {
             val size = if (job.bytesTotal >= 0) job.bytesTotal else resolveSize(job)
             if (size != job.bytesTotal) job = store.update(jobId, bytesTotal = size) ?: return Outcome.CANCELLED
@@ -111,15 +110,14 @@ class UploadQueueWorker(context: Context, params: WorkerParameters) : CoroutineW
                 offset = tus.getOffset(uploadUrl) ?: 0L
             }
             val isCancelled = { UploadQueue.cancelledJobIds.contains(jobId) || isStopped }
+            // Show the resumed server offset right away instead of keeping
+            // "準備上傳…" until the first buffer has been written.
+            throttle.offer(offset, size) { sent -> reportProgress(jobId, sent, size, job.name) }
             if (offset < size) {
                 openSource(job).use { input ->
                     TusClient.skipFully(input, offset)
                     tus.upload(uploadUrl, offset, size, input, CHUNK_SIZE, { sent ->
-                        val now = System.currentTimeMillis()
-                        if (now - lastReport >= PROGRESS_INTERVAL_MS || sent == size) {
-                            lastReport = now
-                            reportProgress(jobId, sent, size, job.name, queuePosition)
-                        }
+                        throttle.offer(sent, size) { reported -> reportProgress(jobId, reported, size, job.name) }
                     }, isCancelled)
                 }
             }
@@ -153,13 +151,39 @@ class UploadQueueWorker(context: Context, params: WorkerParameters) : CoroutineW
         }
     }
 
-    private fun reportProgress(jobId: String, sent: Long, size: Long, name: String, queueText: String) {
+    /** Per-job throttle state around [UploadProgress.shouldPost]. */
+    private class ProgressThrottle {
+        private var lastPostedAtMs: Long? = null
+        private var lastPostedBytes: Long = -1L
+
+        /**
+         * Run [post] when [UploadProgress.shouldPost] allows it.
+         *
+         * @param sentBytes Bytes sent now.
+         * @param totalBytes File size in bytes.
+         * @param post Callback receiving [sentBytes].
+         */
+        fun offer(sentBytes: Long, totalBytes: Long, post: (Long) -> Unit) {
+            val now = System.currentTimeMillis()
+            if (!UploadProgress.shouldPost(now, lastPostedAtMs, lastPostedBytes, sentBytes, totalBytes)) return
+            lastPostedAtMs = now
+            lastPostedBytes = sentBytes
+            post(sentBytes)
+        }
+    }
+
+    private fun reportProgress(jobId: String, sent: Long, size: Long, name: String) {
         store.update(jobId, bytesSent = sent)?.let(NativeEvents::emitUploadProgress)
-        val percent = if (size > 0) ((sent * 100) / size).toInt() else null
+        val otherPending = store.all().count { !it.state.isFinal && it.wifiOnly == wifiOnly && it.jobId != jobId }
         Notifications.postBuilt(
             applicationContext,
             notificationId,
-            Notifications.progress(applicationContext, "正在上傳 $name", queueText, percent),
+            Notifications.progress(
+                applicationContext,
+                "正在上傳 $name",
+                UploadProgress.detailText(sent, size, otherPending),
+                UploadProgress.bar(sent, size),
+            ),
         )
     }
 
@@ -254,6 +278,5 @@ class UploadQueueWorker(context: Context, params: WorkerParameters) : CoroutineW
         const val CHUNK_SIZE: Int = 5 * 1024 * 1024
         /** Attempts before a job is marked failed. */
         const val MAX_ATTEMPTS: Int = 10
-        private const val PROGRESS_INTERVAL_MS: Long = 500
     }
 }

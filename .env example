@@ -17,6 +17,16 @@ SERVER__CORS_ORIGINS='["https://filenexus.pages.dev","https://localhost","capaci
 # PUID=1000
 # PGID=1000
 
+# DATABASE BACKUPS (consistent SQLite snapshots, see deploy/windows/README.md)
+# Host directory mounted at /app/backups; default ./backups. Put it on a
+# different disk than DATA_DIR and create it beforehand (owned by PUID) so
+# Docker does not create it as root.
+# BACKUP_DIR=/mnt/other-disk/filenexus-backups
+# BACKUP__ENABLED=true
+# BACKUP__INTERVAL_HOURS=24
+# BACKUP__KEEP=14
+# BACKUP__INITIAL_DELAY_SECONDS=60
+
 # CLOUDFLARE TUNNEL (only for `docker compose --profile tunnel up -d`)
 # In the tunnel's public hostname, point the service to http://backend:5168
 TUNNEL_TOKEN=""

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cc.spkuan.filenexus",
+      "sha256_cert_fingerprints": [
+        "3C:70:9A:30:58:56:11:32:94:B5:AE:8F:76:23:AF:1A:7E:62:1C:DD:9A:79:0A:4E:05:04:14:B8:E7:41:70:8C"
+      ]
+    }
+  }
+]

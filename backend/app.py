@@ -31,6 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     push_service.startup()
     logger.info("Startup: Initializing databases...")
     await init_db()
+    from backend.services.token_service import token_service
+    await run_in_threadpool(token_service.load)
 
     # Startup: Reconcile disk ↔ DB
     logger.info("Startup: Reconciling file index...")
@@ -58,12 +60,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 logger.error(f"Periodic cleanup failed: {e}")
 
     cleanup_task = asyncio.create_task(periodic_cleanup())
-    
+    from backend.services.backup_service import start_backup_task
+    backup_task = start_backup_task(settings.backup)
+
     yield
-    
-    # Shutdown: Cancel cleanup task
+
+    # Shutdown: Cancel cleanup and backup tasks
     cleanup_task.cancel()
     await asyncio.gather(cleanup_task, return_exceptions=True)
+    if backup_task is not None:
+        backup_task.cancel()
+        await asyncio.gather(backup_task, return_exceptions=True)
 
     await push_service.shutdown()
     from backend.routes.tus import metadata_store

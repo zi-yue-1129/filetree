@@ -5,6 +5,7 @@ from typing import Optional
 import bcrypt
 from fastapi import Header, HTTPException, status
 
+from backend.config import settings
 from backend.services.token_service import token_service
 
 
@@ -79,12 +80,16 @@ async def verify_ownership(token: str, target_username: str) -> bool:
 
 
 def generate_salt() -> str:
-    """Generate a random bcrypt salt.
+    """Generate a random bcrypt salt with the configured work factor.
+
+    The cost comes from ``settings.security.bcrypt_rounds`` (default 12,
+    bcrypt's own default), so production hashing strength is unchanged unless
+    explicitly configured.
 
     Returns:
-        A salt string.
+        A salt string encoding the configured cost.
     """
-    return bcrypt.gensalt().decode("utf-8")
+    return bcrypt.gensalt(rounds=settings.security.bcrypt_rounds).decode("utf-8")
 
 
 def hash_password(password: str, salt: str) -> str:

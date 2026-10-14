@@ -18,6 +18,18 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Android App Links: https://<site>/... (share links /share/<token>,
+                 user pages /<user>?tab=&folder=, /help, ...) open in the app.
+                 Every path is claimed because the bundled SPA has the same router
+                 as the website. The host comes from the siteUrl Gradle property and
+                 is verified against https://<host>/.well-known/assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="${appLinkHost}" />
+            </intent-filter>
         </activity>
 
         <provider

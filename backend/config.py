@@ -56,6 +56,9 @@ class SecurityConfig(BaseModel):
     secret_key: str = "your-secret-key-change-in-production"
     master_key: str = "pigstar"  # Default fallback, should be changed
     share_token_expiry_hours: int = 24
+    # bcrypt work factor for newly hashed passwords; 12 is bcrypt's own
+    # default. Existing hashes keep the cost encoded in them when verified.
+    bcrypt_rounds: int = Field(default=12, ge=4, le=31)
 
 
 class LogicConfig(BaseModel):
@@ -78,6 +81,8 @@ class RateLimitConfig(BaseModel):
     upload_limit: str = "50/minute"
     default_limit: str = "60/minute"
     tus_limit: str = "3000/minute"
+    # Per-client uncached password scans (each bcrypt-checks every user).
+    password_scan_limit: str = "10/minute"
 
 
 
@@ -88,6 +93,32 @@ class PushConfig(BaseModel):
     debounce_seconds: float = Field(default=30.0, gt=0)
 
 
+class BackupConfig(BaseModel):
+    """Scheduled SQLite backup settings (env vars ``BACKUP__*``).
+
+    Attributes:
+        enabled: Whether the server takes periodic backups.
+        dir: Directory receiving backup sets; relative paths resolve against
+            the project root. Should live on a different disk than the DBs.
+        interval_hours: Hours between two scheduled backups.
+        keep: Number of newest backup sets to retain; older sets are deleted.
+        initial_delay_seconds: Delay between startup and the first backup.
+    """
+
+    enabled: bool = True
+    dir: Path = Path("backups")
+    interval_hours: float = Field(default=24.0, gt=0)
+    keep: int = Field(default=14, ge=1)
+    initial_delay_seconds: float = Field(default=60.0, ge=0)
+
+    @model_validator(mode="after")
+    def resolve_relative_dir(self) -> "BackupConfig":
+        """Resolve a relative backup directory against PROJECT_ROOT."""
+        if not self.dir.is_absolute():
+            self.dir = PROJECT_ROOT / self.dir
+        return self
+
+
 class Config(BaseSettings):
     """Global configuration object."""
     server: ServerConfig = ServerConfig()
@@ -95,6 +126,7 @@ class Config(BaseSettings):
     security: SecurityConfig = SecurityConfig()
     logic: LogicConfig = LogicConfig()
     push: PushConfig = PushConfig()
+    backup: BackupConfig = BackupConfig()
 
     rate_limit: RateLimitConfig = RateLimitConfig()
 

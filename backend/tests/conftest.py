@@ -36,6 +36,12 @@ os.environ.update(
         "PATHS__FILES_DB": str(_DATA / "files.db"),
         "RATE_LIMIT__ENABLED": "false",
         "PUSH__DEBOUNCE_SECONDS": "0.02",
+        # Password-only device login bcrypt-verifies every stored account, so
+        # the production cost (12) made each register() call O(users) * ~0.2s.
+        # The minimum cost keeps real bcrypt hashing/verification in tests.
+        "SECURITY__BCRYPT_ROUNDS": "4",
+        "BACKUP__DIR": str(_SANDBOX / "backups"),
+        "BACKUP__INITIAL_DELAY_SECONDS": "0",
     }
 )
 # TusMetadataStore resolves "data/tus_metadata.db" against the CWD.

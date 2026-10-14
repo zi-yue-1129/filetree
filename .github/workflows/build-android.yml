@@ -32,6 +32,9 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ inputs.version }}
+      # Public web origin: share/folder links copied in the app point here, and
+      # its host is the verified App Links host (-PsiteUrl, AndroidManifest.xml).
+      VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
     defaults:
       run:
         working-directory: frontend
@@ -81,6 +84,9 @@ jobs:
           if [[ -z "$VITE_API_BASE_URL" ]]; then
             echo "::error::Repository variable VITE_API_BASE_URL is not set"; exit 1
           fi
+          if [[ -z "$VITE_SITE_URL" ]]; then
+            echo "::error::Repository variable VITE_SITE_URL is not set (the app could not build share links)"; exit 1
+          fi
           npm run build
           npx cap sync android
 
@@ -98,7 +104,7 @@ jobs:
       - name: Test build (debug signing)
         if: steps.version.outputs.release != 'true'
         working-directory: frontend/android
-        run: ./gradlew --no-daemon assembleDebug :filenexus-native:testDebugUnitTest -PappVersion=${{ steps.version.outputs.version }}
+        run: ./gradlew --no-daemon assembleDebug :filenexus-native:testDebugUnitTest -PappVersion=${{ steps.version.outputs.version }} -PsiteUrl="$VITE_SITE_URL"
 
       - name: Upload test artifact
         if: steps.version.outputs.release != 'true'
@@ -125,7 +131,7 @@ jobs:
           done
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_FILE"
-          ./gradlew --no-daemon assembleRelease :filenexus-native:testDebugUnitTest -PappVersion="$VERSION"
+          ./gradlew --no-daemon assembleRelease :filenexus-native:testDebugUnitTest -PappVersion="$VERSION" -PsiteUrl="$VITE_SITE_URL"
           rm -f "$ANDROID_KEYSTORE_FILE"
           apk=app/build/outputs/apk/release/app-release.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk"

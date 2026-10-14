@@ -62,6 +62,8 @@ def build() -> None:
     server: str = os.environ["VITE_API_BASE_URL"]
     if not server.startswith("https://"):
         raise ValueError("Repository variable VITE_API_BASE_URL must be an HTTPS origin")
+    if not os.environ.get("VITE_SITE_URL", "").startswith("https://"):
+        raise ValueError("Repository variable VITE_SITE_URL (public web origin for share links) must be an HTTPS URL")
     run(["npm", "ci"], seconds=600)
     run(["npm", "run", "build"], seconds=600)
     run(["npx", "--no-install", "cap", "sync", "ios"], seconds=300)

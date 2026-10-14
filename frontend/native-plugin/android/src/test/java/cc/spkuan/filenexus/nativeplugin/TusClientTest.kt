@@ -55,6 +55,41 @@ class TusClientTest {
         assertEquals("filename $encodedName,token $encodedToken", request.getHeader("Upload-Metadata"))
     }
 
+    /** Metadata values use RFC 4648 standard base64 with padding (test vectors from section 10). */
+    @Test
+    fun encodeMetadataMatchesRfc4648Vectors() {
+        val plainToEncoded = linkedMapOf(
+            "" to "",
+            "f" to "Zg==",
+            "fo" to "Zm8=",
+            "foo" to "Zm9v",
+            "foob" to "Zm9vYg==",
+            "fooba" to "Zm9vYmE=",
+            "foobar" to "Zm9vYmFy",
+            "ûÿ" to "w7vDvw==",
+        )
+        for ((plain, encoded) in plainToEncoded) {
+            assertEquals("k $encoded", TusClient.encodeMetadata(mapOf("k" to plain)))
+        }
+        assertEquals("a Zg==,b Zm8=", TusClient.encodeMetadata(linkedMapOf("a" to "f", "b" to "fo")))
+    }
+
+    /**
+     * Metadata encoding is byte-identical to `java.util.Base64.getEncoder()` (standard
+     * alphabet incl. `+`/`/`, `=` padding, no line wraps) for seeded random UTF-8 strings,
+     * including values long enough that a MIME encoder would wrap them.
+     */
+    @Test
+    fun encodeMetadataIsIdenticalToJavaUtilBase64() {
+        val random = java.util.Random(RANDOM_SEED)
+        repeat(200) { index ->
+            val length = random.nextInt(300)
+            val value = String(CharArray(length) { (random.nextInt(0x3000) + 1).toChar() })
+            val expected = "k " + Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))
+            assertEquals("sample $index", expected, TusClient.encodeMetadata(mapOf("k" to value)))
+        }
+    }
+
     /** HEAD on a vanished upload returns null so the caller recreates it. */
     @Test
     fun getOffsetReturnsNullWhenUploadIsGone() {
@@ -99,5 +134,10 @@ class TusClientTest {
     fun httpErrorsClassifyRetryability() {
         assertTrue(TusHttpException(503, "x").isRetryable)
         assertTrue(!TusHttpException(401, "x").isRetryable)
+    }
+
+    private companion object {
+        /** Fixed seed so the random encoding comparison is reproducible. */
+        const val RANDOM_SEED: Long = 20261014L
     }
 }
