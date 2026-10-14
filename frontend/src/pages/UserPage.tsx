@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { m, AnimatePresence } from 'framer-motion';
 import { SecurityInitializationModal } from '../components/SecurityInitializationModal';
@@ -17,6 +17,11 @@ import { useStableCallback } from '../hooks/useStableCallback';
 import { UserPageHeader } from '../components/user-page/UserPageHeader';
 import { UserPageToolbar } from '../components/user-page/UserPageToolbar';
 import { BreadcrumbsBar } from '../components/user-page/BreadcrumbsBar';
+import { MobileUserChrome } from '../components/user-page/MobileUserChrome';
+import { MobileContentSwitch } from '../components/user-page/MobileContentSwitch';
+import { MOBILE_CHROME_TOP_ZONE_PX, MOBILE_NAME_MAX_SHIFT_PX, MOBILE_NAME_PX } from '../components/user-page/mobileChromeLayout';
+import { useHideOnScroll } from '../hooks/useHideOnScroll';
+import { useEffects } from '../hooks/useEffects';
 import type { Folder, UserDashboardData } from '../types/dashboard';
 
 // The QR code renderer is only needed once a QR dialog opens.
@@ -24,10 +29,23 @@ const QRCodeSVG = React.lazy(() => import('qrcode.react').then((module) => ({ de
 
 interface UserPageProps {
   data: UserDashboardData;
+  /** Toggle the app's left navigation drawer (phone top row). */
+  onToggleSidebar: () => void;
+  /** Toggle the app's right directory drawer (phone top row). */
+  onToggleDirectory: () => void;
 }
 
+/**
+ * User dashboard: files and notes of one user, with folders, selection and
+ * batch actions. Phones get a floating chrome (see MobileUserChrome).
+ *
+ * @param props - Component props.
+ * @returns The dashboard.
+ */
 const UserPageView: React.FC<UserPageProps> = ({
-  data: initialData 
+  data: initialData,
+  onToggleSidebar,
+  onToggleDirectory,
 }) => {
   const {
     dashboardData,
@@ -745,27 +763,96 @@ const UserPageView: React.FC<UserPageProps> = ({
     ? (filteredFiles.length > 0 && selectedItems.filter(i => i.type === 'file').length === filteredFiles.length)
     : (filteredUrls.length > 0 && selectedItems.filter(i => i.type === 'url').length === filteredUrls.length);
 
+  // Phone chrome: the breadcrumb row hides while scrolling down. Selection
+  // mode pins it (it holds 全選 / 結束選取).
+  const { level: effectsLevel } = useEffects();
+  const pageRootRef = useRef<HTMLDivElement>(null);
+  const mobileChromeRef = useRef<HTMLDivElement>(null);
+  const activeFolderId = activeTab === 'files' ? activeFileFolderId : activeUrlFolderId;
+  const scrolledBreadcrumbHidden = useHideOnScroll(pageRootRef, mobileChromeRef, {
+    enabled: !isDesktop,
+    resetKey: `${activeTab}:${activeFolderId ?? ''}`,
+    topZonePx: MOBILE_CHROME_TOP_ZONE_PX,
+    fadeDistancePx: MOBILE_NAME_PX,
+    maxOffsetPx: MOBILE_NAME_MAX_SHIFT_PX,
+  });
+  const breadcrumbHidden = scrolledBreadcrumbHidden && !isSelectionMode;
+  const handleLogout = (): void => {
+    logout();
+    setIsAuthenticated(false);
+    refreshDashboard(null);
+  };
+  const handleLockClick = (): void => {
+    if (isAuthenticated) handleLogout();
+    else setShowAuthModal(true);
+  };
+  const clearSelection = (): void => { setIsSelectionMode(false); setSelectedItems([]); };
+  const toggleFolderSidebar = (): void => setIsSidebarOpen(!isSidebarOpen);
+  const fileBreadcrumbs = (
+    <BreadcrumbsBar
+      breadcrumbs={getBreadcrumbs(activeFileFolderId)}
+      activeFolderId={activeFileFolderId}
+      onNavigate={(id) => handleFolderNavigation('file', id)}
+      onSidebarToggle={toggleFolderSidebar}
+      isSelectionMode={isSelectionMode}
+      onSelectionModeChange={setIsSelectionMode}
+      selectedItems={selectedItems}
+      itemCount={filteredFiles.length}
+      filteredCount={filteredFiles.length}
+      onSelectAll={handleSelectAllAction}
+      onClearSelection={clearSelection}
+      activeTab="files"
+    />
+  );
+  const urlBreadcrumbs = (
+    <BreadcrumbsBar
+      breadcrumbs={getBreadcrumbs(activeUrlFolderId)}
+      activeFolderId={activeUrlFolderId}
+      onNavigate={(id) => handleFolderNavigation('url', id)}
+      onSidebarToggle={toggleFolderSidebar}
+      isSelectionMode={isSelectionMode}
+      onSelectionModeChange={setIsSelectionMode}
+      selectedItems={selectedItems}
+      itemCount={filteredUrls.length}
+      filteredCount={filteredUrls.length}
+      onSelectAll={handleSelectAllAction}
+      onClearSelection={clearSelection}
+      activeTab="urls"
+    />
+  );
+
   return (
-    <div className="h-full flex flex-col relative text-gray-900 dark:text-gray-100 font-sans selection:bg-cyan-500/30">
+    <div ref={pageRootRef} className="h-full flex flex-col relative text-gray-900 dark:text-gray-100 font-sans selection:bg-cyan-500/30">
       
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute inset-0 bg-linear-to-br from-indigo-500/5 via-purple-500/5 to-pink-500/5 pointer-events-none" />
       </div>
 
-      <UserPageHeader
-        user={dashboardData.user}
-        usage={dashboardData.usage}
-        isAuthenticated={isAuthenticated}
-        onLogout={() => {
-            logout();
-            setIsAuthenticated(false);
-            refreshDashboard(null);
-        }}
-        onShowAuth={() => setShowAuthModal(true)}
-        onShowSettings={() => setShowSettingsModal(true)}
-      />
+      {isDesktop ? (
+        <UserPageHeader
+          user={dashboardData.user}
+          usage={dashboardData.usage}
+          isAuthenticated={isAuthenticated}
+          onLogout={handleLogout}
+          onShowAuth={() => setShowAuthModal(true)}
+          onShowSettings={() => setShowSettingsModal(true)}
+        />
+      ) : (
+        <MobileUserChrome
+          chromeRef={mobileChromeRef}
+          username={dashboardData.user?.username || ''}
+          isAuthenticated={isAuthenticated}
+          onLockClick={handleLockClick}
+          onShowSettings={() => setShowSettingsModal(true)}
+          onToggleSidebar={onToggleSidebar}
+          onToggleDirectory={onToggleDirectory}
+          breadcrumbs={activeTab === 'files' ? fileBreadcrumbs : urlBreadcrumbs}
+          breadcrumbHidden={breadcrumbHidden}
+          animate={effectsLevel === 'full'}
+        />
+      )}
 
-      <UserPageToolbar
+      {isDesktop && <UserPageToolbar
         activeTab={activeTab}
         onTabChange={handleTabChange}
         viewMode={viewMode}
@@ -778,9 +865,11 @@ const UserPageView: React.FC<UserPageProps> = ({
         itemCount={activeTab === 'files' ? filteredFiles.length : filteredUrls.length}
         allItemsSelected={isAllSelected}
         onSelectAll={handleSelectAllAction}
-      />
+      />}
 
-      <main className="flex-1 min-h-0 px-1 pb-1 lg:px-6 lg:pb-6 relative z-10 overflow-hidden flex gap-1 lg:gap-4">
+      {/* Phones: no z-index here, so the floating chrome (z-20) sits above the
+          content while the folder drawer (z-30/z-40) still covers it. */}
+      <main className="flex-1 min-h-0 px-1 pb-1 lg:px-6 lg:pb-6 relative lg:z-10 overflow-hidden flex gap-1 lg:gap-4">
         <div className="relative flex">
           <AnimatePresence mode="wait">
             {isSidebarOpen && (
@@ -801,7 +890,9 @@ const UserPageView: React.FC<UserPageProps> = ({
                   className={cn(
                     "overflow-hidden bg-white/80 dark:bg-space-deep/90 backdrop-blur-xl border-r border-white/10 h-full",
                     "lg:relative",
-                    "absolute top-0 left-0 z-40 h-full shadow-2xl"
+                    "absolute top-0 left-0 z-40 h-full shadow-2xl",
+                    // Phones: the drawer starts at the screen top (no app header).
+                    "pt-[env(safe-area-inset-top,0px)] lg:pt-0"
                   )}
                 >
                   <FolderSidebar
@@ -835,20 +926,7 @@ const UserPageView: React.FC<UserPageProps> = ({
               exit={{ opacity: 0, x: 20 }}
               className="flex-1 min-w-0 h-full flex flex-col gap-2 sm:gap-4"
             >
-              <BreadcrumbsBar
-                breadcrumbs={getBreadcrumbs(activeFileFolderId)}
-                activeFolderId={activeFileFolderId}
-                onNavigate={(id) => handleFolderNavigation('file', id)}
-                onSidebarToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-                isSelectionMode={isSelectionMode}
-                onSelectionModeChange={setIsSelectionMode}
-                selectedItems={selectedItems}
-                itemCount={filteredFiles.length}
-                filteredCount={filteredFiles.length}
-                onSelectAll={handleSelectAllAction}
-                onClearSelection={() => { setIsSelectionMode(false); setSelectedItems([]); }}
-                activeTab="files"
-              />
+              {isDesktop && fileBreadcrumbs}
 
               <FileView
                 files={filteredFiles}
@@ -878,6 +956,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                 onDownloadFolder={onDownloadFolder}
                 onToggleFolderLock={onToggleItemLock}
                 isDesktop={isDesktop}
+                mobileTopInset={!isDesktop}
               />
             </m.div>
           ) : (
@@ -888,20 +967,7 @@ const UserPageView: React.FC<UserPageProps> = ({
               exit={{ opacity: 0, x: -20 }}
               className="flex-1 min-w-0 h-full flex flex-col gap-4"
             >
-              <BreadcrumbsBar
-                breadcrumbs={getBreadcrumbs(activeUrlFolderId)}
-                activeFolderId={activeUrlFolderId}
-                onNavigate={(id) => handleFolderNavigation('url', id)}
-                onSidebarToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-                isSelectionMode={isSelectionMode}
-                onSelectionModeChange={setIsSelectionMode}
-                selectedItems={selectedItems}
-                itemCount={filteredUrls.length}
-                filteredCount={filteredUrls.length}
-                onSelectAll={handleSelectAllAction}
-                onClearSelection={() => { setIsSelectionMode(false); setSelectedItems([]); }}
-                activeTab="urls"
-              />
+              {isDesktop && urlBreadcrumbs}
 
               <UrlView
                 urls={filteredUrls}
@@ -926,6 +992,7 @@ const UserPageView: React.FC<UserPageProps> = ({
                 onQrCodeFolder={onQrCodeUrlFolder}
                 onPreview={onPreviewItem}
                 isDesktop={isDesktop}
+                mobileTopInset={!isDesktop}
               />
             </m.div>
           )}
@@ -1166,6 +1233,12 @@ const UserPageView: React.FC<UserPageProps> = ({
         onClose={() => setPreviewFile(null)}
         file={previewFile}
       />
+
+      {/* Phones: the files/notes switch floats at the bottom; selection mode
+          hands that spot to the batch action bar. */}
+      {!isDesktop && !isSelectionMode && selectedItems.length === 0 && (
+        <MobileContentSwitch activeTab={activeTab} onTabChange={handleTabChange} />
+      )}
 
       {selectedItems.length > 0 && isAuthenticated && (
         <BatchActionBar

@@ -251,6 +251,189 @@ async function checkDashboard(page: Page, baseUrl: string, mobile: boolean, sess
   await page.getByRole('button', { name: '關閉' }).click();
 }
 
+/** Labels of the floating top-row buttons of the phone user page, in visual order. */
+const MOBILE_TOP_ROW_LABELS: RegExp[] = [/^功能選單$/, /^(鎖定頁面|解鎖頁面)$/, /^使用者設定$/, /^目錄$/];
+
+/** Where an element is and whether a user can see and tap it. */
+interface UserVisibility {
+  /** Bounding box in viewport CSS px. */
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  /** Product of the opacities of the element and its ancestors. */
+  opacity: number;
+  /** Computed visibility is not `hidden`. */
+  visibilityVisible: boolean;
+  /** A tap at the centre reaches the element (or a descendant). */
+  centreHit: boolean;
+  /** Computed `position` of the element. */
+  position: string;
+}
+
+/**
+ * Measure an element's box, opacity, visibility and hit-testability.
+ *
+ * @param page - Page.
+ * @param selector - CSS selector of the element (first match).
+ * @returns Measurement.
+ * @throws Error when no element matches.
+ */
+async function measureVisibility(page: Page, selector: string): Promise<UserVisibility> {
+  return page.evaluate((target) => {
+    const element = document.querySelector(target);
+    if (!element) throw new Error(`no element matches ${target}`);
+    const rect = element.getBoundingClientRect();
+    let opacity = 1;
+    for (let current: Element | null = element; current; current = current.parentElement) {
+      opacity *= Number(getComputedStyle(current).opacity);
+    }
+    const centreX = Math.min(Math.max(rect.left + rect.width / 2, 0), window.innerWidth - 1);
+    const centreY = Math.min(Math.max(rect.top + rect.height / 2, 0), window.innerHeight - 1);
+    const hit = document.elementFromPoint(centreX, centreY);
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+      opacity,
+      visibilityVisible: getComputedStyle(element).visibility !== 'hidden',
+      centreHit: hit !== null && element.contains(hit),
+      position: getComputedStyle(element).position,
+    };
+  }, selector);
+}
+
+/**
+ * Whether a measured element is on screen, opaque and tappable.
+ *
+ * @param box - Measurement.
+ * @param viewportHeight - Viewport height in CSS px.
+ * @returns True when a user sees and can tap it.
+ */
+function isShown(box: UserVisibility, viewportHeight: number): boolean {
+  return box.visibilityVisible && box.opacity > 0.5 && box.centreHit && box.bottom > 0 && box.top < viewportHeight;
+}
+
+/**
+ * Scroll the dashboard's own scroll container (the phone page scrolls an
+ * inner pane, not the window) in small steps, one frame apart, like a finger.
+ *
+ * @param page - Page.
+ * @param deltaY - Total distance in CSS px (negative scrolls up).
+ */
+async function scrollDashboard(page: Page, deltaY: number): Promise<void> {
+  await page.evaluate(async (distance) => {
+    const firstItem = document.querySelector('.file-item, [data-id^="url:"]');
+    let scroller: Element | null = firstItem;
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(scroller).overflowY))) {
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) throw new Error('the dashboard has no scroll container');
+    const steps = 8;
+    for (let step = 0; step < steps; step += 1) {
+      scroller.scrollTop += distance / steps;
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    }
+  }, deltaY);
+  // Let the hide/show transition finish.
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Phone: redesigned user page. A floating, buttons-only top row (menu, lock,
+ * settings, directory; no "FileNexus" bar) stays fixed; the user name scrolls
+ * away with the content; the breadcrumb row hides while scrolling down and
+ * comes back when scrolling up; the files/notes switch floats at the bottom.
+ * Before, four stacked rows (~280 px) sat above the first card.
+ *
+ * @param page - Phone page.
+ * @param baseUrl - App URL.
+ */
+async function checkMobileUserPageLayout(page: Page, baseUrl: string): Promise<void> {
+  await page.goto(`${baseUrl}/perfuser`);
+  await page.locator('.file-item').first().waitFor();
+  await page.waitForTimeout(700);
+  const viewport = page.viewportSize();
+  if (viewport === null) throw new Error('page has no viewport size');
+
+  // 1. Scroll-top: button order, no brand bar, name then breadcrumb below the row.
+  const topRow = page.locator('[data-testid="mobile-top-row"]');
+  check((await topRow.count()) === 1, 'the phone user page must have one floating top button row');
+  const rowButtons = topRow.locator('button');
+  const labels: string[] = [];
+  const lefts: number[] = [];
+  for (let index = 0; index < (await rowButtons.count()); index += 1) {
+    const button = rowButtons.nth(index);
+    if (!(await button.isVisible())) continue;
+    labels.push((await button.getAttribute('aria-label')) ?? '');
+    lefts.push((await button.boundingBox())?.x ?? Number.NaN);
+  }
+  check(labels.length === MOBILE_TOP_ROW_LABELS.length && MOBILE_TOP_ROW_LABELS.every((pattern, index) => pattern.test(labels[index])),
+    `top row buttons must be menu, lock, settings, directory; got ${JSON.stringify(labels)}`);
+  check(lefts.every((left, index) => index === 0 || left > lefts[index - 1]), `top row buttons must be left-to-right, x=${lefts.join(',')}`);
+  const visibleBrand = await page.evaluate(() => Array.from(document.querySelectorAll('body *'))
+    .filter((element) => element.children.length === 0 && element.textContent?.trim() === 'FileNexus')
+    .some((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.left < window.innerWidth && getComputedStyle(element).visibility !== 'hidden';
+    }));
+  check(!visibleBrand, 'the phone user page header must not show the "FileNexus" brand text');
+  const row = await measureVisibility(page, '[data-testid="mobile-top-row"] button');
+  const name = await measureVisibility(page, '[data-testid="mobile-user-name"]');
+  // The name is plain text and lets taps through (pointer-events: none), so
+  // it is judged on visibility only, not on hit testing.
+  check(name.visibilityVisible && name.opacity > 0.5 && name.top >= 0 && name.bottom <= viewport.height,
+    `at scroll-top the user name must be visible: ${JSON.stringify(name)}`);
+  check((await page.locator('[data-testid="mobile-user-name"]').textContent())?.includes('perfuser') === true, 'the name block must show the username');
+  check(name.top >= row.bottom - 1, `the user name (top ${name.top}) must sit below the button row (bottom ${row.bottom})`);
+  const crumbsSelector = '[data-testid="mobile-breadcrumbs"]';
+  let crumbs = await measureVisibility(page, crumbsSelector);
+  check(isShown(crumbs, viewport.height), `at scroll-top the breadcrumb row must be visible: ${JSON.stringify(crumbs)}`);
+  check(crumbs.top >= name.bottom - 1, `the breadcrumb (top ${crumbs.top}) must sit below the name (bottom ${name.bottom})`);
+
+  // 5. Height used above the first card.
+  const firstCardTop = await page.evaluate(() => {
+    const card = document.querySelector('.folder-card, .file-item');
+    if (!card) throw new Error('no card rendered');
+    return card.getBoundingClientRect().top;
+  });
+  check(firstCardTop <= 170, `the top chrome must use at most ~170 px above the first card, first card at ${firstCardTop}`);
+
+  // 4. Floating files/notes switch at the bottom.
+  const tablist = page.getByRole('tablist', { name: '內容切換' });
+  check((await tablist.count()) === 1, 'the phone user page must have a bottom 檔案/筆記 tablist');
+  const switchBox = await measureVisibility(page, '[role="tablist"][aria-label="內容切換"]');
+  check(switchBox.position === 'fixed', `the switch must float (position fixed), got ${switchBox.position}`);
+  check(viewport.height - switchBox.bottom <= 120 && switchBox.bottom <= viewport.height, `the switch must sit at the bottom, bottom=${switchBox.bottom}`);
+  check(isShown(switchBox, viewport.height), 'the switch must be visible and tappable');
+
+  // 2. Scroll down: row stays, name leaves, breadcrumb hides.
+  await scrollDashboard(page, 400);
+  const rowAfter = await measureVisibility(page, '[data-testid="mobile-top-row"] button');
+  check(isShown(rowAfter, viewport.height) && rowAfter.top >= 0 && rowAfter.top < 80, `after scrolling down the button row must stay at the top: ${JSON.stringify(rowAfter)}`);
+  const nameAfter = await measureVisibility(page, '[data-testid="mobile-user-name"]');
+  check(nameAfter.bottom <= 0 || nameAfter.opacity < 0.05 || !nameAfter.visibilityVisible,
+    `after scrolling down the user name must be out of view: ${JSON.stringify(nameAfter)}`);
+  crumbs = await measureVisibility(page, crumbsSelector);
+  check(!crumbs.centreHit && (crumbs.opacity < 0.05 || !crumbs.visibilityVisible || crumbs.bottom <= rowAfter.top),
+    `after scrolling down the breadcrumb must be hidden and not tappable: ${JSON.stringify(crumbs)}`);
+
+  // 3. Scroll up a bit: breadcrumb returns.
+  await scrollDashboard(page, -80);
+  crumbs = await measureVisibility(page, crumbsSelector);
+  check(isShown(crumbs, viewport.height), `after scrolling up the breadcrumb must be visible again: ${JSON.stringify(crumbs)}`);
+  check(crumbs.top >= rowAfter.bottom - 1, `the breadcrumb (top ${crumbs.top}) must sit below the button row (bottom ${rowAfter.bottom})`);
+
+  // 4b. Switch to notes and back.
+  await page.getByRole('tab', { name: '筆記' }).click();
+  await page.locator('[data-id^="url:"]').first().waitFor();
+  check(await page.getByRole('tab', { name: '筆記' }).getAttribute('aria-selected') === 'true', '筆記 tab must be selected');
+  await page.getByRole('tab', { name: '檔案' }).click();
+  await page.locator('.file-item').first().waitFor();
+  check(await page.getByRole('tab', { name: '檔案' }).getAttribute('aria-selected') === 'true', '檔案 tab must be selected');
+}
+
 /**
  * Phone: every visible interactive element of the key screens must offer a
  * touch target of at least 44x44 CSS px (WCAG 2.5.5, Apple HIG; measured by
@@ -343,7 +526,8 @@ async function checkTapTargets(page: Page, baseUrl: string): Promise<void> {
   await audit('selection-mode');
   await page.goto(`${baseUrl}/perfuser`);
   await page.locator('.file-item').first().waitFor();
-  await page.getByRole('button', { name: /筆記 \/ 連結/ }).click();
+  // Phones switch content with the floating bottom tablist.
+  await page.getByRole('tab', { name: '筆記' }).click();
   await page.locator('[data-id^="url:"]').first().waitFor();
   await audit('urls-tab');
 
@@ -626,6 +810,7 @@ async function main(): Promise<void> {
         await checkNoBrandFooter(page);
         if (effects === 'plain') await checkPlainMode(page, requestedUrls);
         await checkDashboard(page, stack.baseUrl, mobile, session);
+        if (mobile) await checkMobileUserPageLayout(page, stack.baseUrl);
         if (mobile) await checkTapTargets(page, stack.baseUrl);
         if (!mobile && effects === 'full') {
           await page.goto(`${stack.baseUrl}/`);

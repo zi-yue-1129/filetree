@@ -23,6 +23,8 @@ import { createPortal } from 'react-dom';
 import { useSelectionBox } from '../../hooks/useSelectionBox';
 import { FolderItem } from './FolderItem';
 import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
+import { MobileTopSpacer } from '../user-page/MobileTopSpacer';
+import { DASHBOARD_SCROLLER_ATTRIBUTE } from '../../hooks/useHideOnScroll';
 import { setDragPreview, type DragItem } from '../../utils/dragUtils';
 import type { Folder } from './FolderSidebar';
 
@@ -68,6 +70,7 @@ const CustomScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
   <div
     ref={ref}
     {...props}
+    {...{ [DASHBOARD_SCROLLER_ATTRIBUTE]: '' }}
     className="custom-scrollbar"
     style={{
       ...style,
@@ -79,6 +82,15 @@ const CustomScroller = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
   </div>
 ));
 CustomScroller.displayName = 'CustomScroller';
+
+/** Data handed to the Virtuoso header through its `context` prop. */
+interface UrlListContext {
+  /** Content scrolled above the first row (phone: chrome spacer and folders). */
+  header: React.ReactNode;
+}
+
+/** Virtual list header (phones only; desktop keeps the folders above the list). */
+const UrlListHeader: React.FC<{ context?: UrlListContext }> = ({ context }) => <>{context?.header}</>;
 
 interface UrlViewProps {
   urls: UrlItem[];
@@ -107,6 +119,8 @@ interface UrlViewProps {
   onDownloadFolder?: (folderId: string) => void;
   onPreview: (note: { name: string; size: string; url: string }) => void;
   isDesktop?: boolean;
+  /** Phone: start the scroll content below the floating chrome. */
+  mobileTopInset?: boolean;
 }
 
 const isValidUrl = (url: string) => {
@@ -184,7 +198,8 @@ export const UrlView: React.FC<UrlViewProps> = ({
   onQrCodeFolder,
   onDownloadFolder,
   onPreview,
-  isDesktop = true
+  isDesktop = true,
+  mobileTopInset = false
 }) => {
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
@@ -196,15 +211,19 @@ export const UrlView: React.FC<UrlViewProps> = ({
   );
   const filteredUrls = useMemo(() => urls || [], [urls]);
 
+  // Phones scroll the folders with the notes (virtual list header) so the
+  // floating chrome can sit over the top of the scroll content.
   const gridComponents = useMemo(() => ({
     List: GridListContainer,
     Scroller: CustomScroller,
-  }), []);
+    ...(mobileTopInset ? { Header: UrlListHeader } : {}),
+  }), [mobileTopInset]);
 
   const listComponents = useMemo(() => ({
     List: ListContainer,
     Scroller: CustomScroller,
-  }), []);
+    ...(mobileTopInset ? { Header: UrlListHeader } : {}),
+  }), [mobileTopInset]);
 
   const { selectionBox, handlePointerDown, handlePointerMove, handlePointerUp, handleTouchStart, handleTouchMove } = useSelectionBox(
     containerRef,
@@ -245,34 +264,8 @@ export const UrlView: React.FC<UrlViewProps> = ({
 
 
 
-  return (
-    <section className="flex-1 min-h-0 flex flex-col bg-white/60 dark:bg-space-black/40 backdrop-blur-xl rounded-4xl border border-white/40 dark:border-white/5 shadow-2xl overflow-hidden relative">
-      <div className="absolute inset-0 bg-linear-to-b from-white/20 to-transparent dark:from-white/5 dark:to-transparent pointer-events-none" />
-
-      <div 
-        ref={containerRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        className="flex-1 min-w-0 overflow-hidden p-2 sm:p-4 custom-scrollbar touch-pan-y relative flex flex-col"
-      >
-        {selectionBox && createPortal(
-          <div
-            className="fixed bg-violet-500/20 border border-violet-500/50 z-9999 pointer-events-none rounded"
-            style={{
-              left: selectionBox.x1,
-              top: selectionBox.y1,
-              width: selectionBox.x2 - selectionBox.x1,
-              height: selectionBox.y2 - selectionBox.y1,
-            }}
-          />,
-          document.body
-        )}
-
-        {/* Render Folders */}
-        {currentSubfolders.length > 0 && (
+  const hasUrls = !!urls && urls.length > 0;
+  const foldersNode = currentSubfolders.length > 0 ? (
           <div className="mb-6">
             <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
               Folders
@@ -314,6 +307,51 @@ export const UrlView: React.FC<UrlViewProps> = ({
               })}
             </div>
           </div>
+  ) : null;
+  const listContext: UrlListContext = {
+    header: mobileTopInset ? (
+      <>
+        <MobileTopSpacer />
+        {foldersNode}
+      </>
+    ) : null,
+  };
+
+  return (
+    // Phones: full-bleed pane (no card frame) under the floating chrome;
+    // `isolate` keeps raised cards (z-index) below that chrome even when
+    // low-power modes drop the backdrop-filter that used to isolate them.
+    <section className="flex-1 min-h-0 flex flex-col bg-white/60 dark:bg-space-black/40 backdrop-blur-xl lg:rounded-4xl border-0 lg:border border-white/40 dark:border-white/5 lg:shadow-2xl overflow-hidden relative isolate">
+      <div className="absolute inset-0 bg-linear-to-b from-white/20 to-transparent dark:from-white/5 dark:to-transparent pointer-events-none" />
+
+      <div 
+        ref={containerRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 min-w-0 overflow-hidden px-2 pb-2 sm:px-4 sm:pb-4 lg:pt-4 custom-scrollbar touch-pan-y relative flex flex-col"
+      >
+        {selectionBox && createPortal(
+          <div
+            className="fixed bg-violet-500/20 border border-violet-500/50 z-9999 pointer-events-none rounded"
+            style={{
+              left: selectionBox.x1,
+              top: selectionBox.y1,
+              width: selectionBox.x2 - selectionBox.x1,
+              height: selectionBox.y2 - selectionBox.y1,
+            }}
+          />,
+          document.body
+        )}
+
+        {/* Render Folders (phones with notes: inside the virtual list header) */}
+        {(!mobileTopInset || !hasUrls) && (
+          <>
+            {mobileTopInset && <MobileTopSpacer />}
+            {foldersNode}
+          </>
         )}
 
         {(!urls || urls.length === 0) && currentSubfolders.length === 0 ? (
@@ -332,6 +370,7 @@ export const UrlView: React.FC<UrlViewProps> = ({
                 totalCount={filteredUrls.length}
                 overscan={200}
                 components={gridComponents}
+                context={listContext}
                 itemContent={(_index, url) => {
                   const isSelected = !!selectedItems.find(i => i.type === 'url' && i.id === url.url);
                   const isLocked = url.is_locked && !isAuthenticated;
@@ -563,6 +602,7 @@ export const UrlView: React.FC<UrlViewProps> = ({
                 totalCount={filteredUrls.length}
                 overscan={200}
                 components={listComponents}
+                context={listContext}
                 itemContent={(_index, url) => {
                   const isSelected = !!selectedItems.find(i => i.type === 'url' && i.id === url.url);
                   const isLocked = url.is_locked && !isAuthenticated;
