@@ -12,6 +12,7 @@ import logging
 import os
 import secrets
 import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 import aiofiles
@@ -104,11 +105,23 @@ def calculate_fingerprint(
     return "-".join(parts)
 
 
-async def finalize_upload_local(upload: dict[str, Any]) -> None:
-    """Finalize upload: move from temp to user folder, notify.
+async def finalize_upload_local(upload: dict[str, Any]) -> Path:
+    """Finalize upload: move from temp into the user folder, index, notify.
+
+    Runs before the last PATCH is answered, so a client that sees the final
+    ``204`` can rely on the file being listed on the dashboard. Failures
+    propagate to the caller, which reports them to the client.
 
     Args:
         upload: Persisted upload session and metadata.
+
+    Returns:
+        Final path of the imported file (deduplication is left to the caller).
+
+    Raises:
+        HTTPException: If the destination folder is no longer valid.
+        ValueError: If the upload owner no longer exists.
+        OSError: If the file cannot be moved or indexed.
     """
     upload_id = upload["id"]
     username = upload["username"]
@@ -116,46 +129,110 @@ async def finalize_upload_local(upload: dict[str, Any]) -> None:
 
     logger.info(f"Finalizing Local TUS upload {upload_id} for user {username}...")
 
-    try:
-        # 1. Path to temp file
-        temp_path = settings.paths.tus_temp_folder / upload_id
+    temp_path = settings.paths.tus_temp_folder / upload_id
+    folder_id = upload["metadata"].get("folder_id")
+    await validate_folder(username, folder_id)
+    user = await user_service.get_user_by_name(username)
+    if user is None:
+        raise ValueError("Upload owner no longer exists")
+    path_names = await user_service.get_folder_path_names(username, folder_id)
+    final_path = await file_service.import_file(
+        temp_path, user["folder"], filename, path_names, folder_id, deduplicate=False
+    )
+    logger.info(f"File imported successfully as: {final_path.name}")
 
-        if not temp_path.exists():
-            logger.error(f"Temp file not found: {temp_path}")
-            return
+    await audit_service.log_event(
+        username,
+        "FILE_UPLOAD_TUS",
+        f"TUS Upload completed (Local): {final_path.name}",
+        ip="TUS_LOCAL",
+    )
+    await event_service.notify_user_update(username)
+    push_service.schedule_files_added(username, upload["metadata"].get("device_id"))
+    return final_path
 
-        # 2. Import to user folder (dedup & move)
-        # This is an instant move on same filesystem
-        folder_id = upload["metadata"].get("folder_id")
-        await validate_folder(username, folder_id)
-        user = await user_service.get_user_by_name(username)
-        if user is None:
-            raise ValueError("Upload owner no longer exists")
-        path_names = await user_service.get_folder_path_names(username, folder_id)
-        final_name = await file_service.import_file(
-            temp_path, user["folder"], filename, path_names, folder_id
-        )
 
-        if not final_name:
-            logger.error(f"Failed to import file to user folder: {filename}")
-            return
+async def _deduplicate_in_background(path: Path) -> None:
+    """Hash a finished upload after the response (large files take a while).
 
-        logger.info(f"File imported successfully as: {final_name}")
+    Args:
+        path: Imported file.
+    """
+    from backend.services.dedup_service import dedup_service
 
-        # 3. Notify & Audit
-        await audit_service.log_event(
-            username,
-            "FILE_UPLOAD_TUS",
-            f"TUS Upload completed (Local): {final_name}",
-            ip="TUS_LOCAL",
-        )
-        await event_service.notify_user_update(username)
-        push_service.schedule_files_added(username, upload["metadata"].get("device_id"))
+    await dedup_service.deduplicate(path)
 
-    except Exception as e:
-        logger.error(
-            f"Error in finalize_upload_local for {upload_id}: {e}", exc_info=True
-        )
+
+async def _abort_failed_finalization(upload_id: str) -> None:
+    """Forget an upload whose file could not be placed.
+
+    HEAD/PATCH then answer 410, so resumable clients start a fresh upload
+    instead of treating the stored offset as a finished file.
+
+    Args:
+        upload_id: Upload session identifier.
+    """
+    await run_in_threadpool(metadata_store.mark_aborted, upload_id)
+    (settings.paths.tus_temp_folder / upload_id).unlink(missing_ok=True)
+
+
+async def recover_stranded_uploads(dry_run: bool) -> list[str]:
+    """Import uploads that finished but were never placed in a user folder.
+
+    Earlier servers answered the last PATCH before finalising and only logged
+    finalisation errors (e.g. ``EXDEV`` when ``tus_temp`` and ``uploads`` are
+    separate mounts), leaving ``completed`` sessions whose bytes are still in
+    ``tus_temp``. Successfully imported uploads no longer have a temp file.
+
+    Args:
+        dry_run: Only report what would be imported.
+
+    Returns:
+        Upload ids that were (or, in a dry run, would be) imported.
+    """
+    candidates = [
+        upload
+        for upload in await run_in_threadpool(metadata_store.list_completed)
+        if (settings.paths.tus_temp_folder / upload["id"]).is_file()
+        and (settings.paths.tus_temp_folder / upload["id"]).stat().st_size
+        == upload["size"]
+    ]
+    if dry_run:
+        return [upload["id"] for upload in candidates]
+    recovered: list[str] = []
+    for upload in candidates:
+        try:
+            final_path = await finalize_upload_local(upload)
+        except Exception as error:
+            # One bad record (e.g. its folder was deleted) must not block the
+            # rest; it stays in tus_temp for manual inspection.
+            logger.error(
+                f"Could not recover upload {upload['id']} ({upload['filename']}): {error}",
+                exc_info=True,
+            )
+            continue
+        await _deduplicate_in_background(final_path)
+        recovered.append(upload["id"])
+    return recovered
+
+
+def _require_open_upload(upload: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Reject unknown and aborted upload sessions.
+
+    Args:
+        upload: Stored session, or None.
+
+    Returns:
+        The session when it is active or completed.
+
+    Raises:
+        HTTPException: 404 when unknown, 410 when aborted.
+    """
+    if not upload:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    if upload["status"] == "aborted":
+        raise HTTPException(status_code=410, detail="Upload was aborted")
+    return upload
 
 
 @router.post("/upload/tus")
@@ -381,10 +458,9 @@ async def get_tus_upload_offset(
     Returns:
         Endpoint response.
     """
-    upload = await run_in_threadpool(metadata_store.get_upload, upload_id)
-
-    if not upload:
-        raise HTTPException(status_code=404, detail="Upload not found")
+    upload = _require_open_upload(
+        await run_in_threadpool(metadata_store.get_upload, upload_id)
+    )
     await _authorize_upload(request, upload)
 
     return Response(
@@ -427,10 +503,9 @@ async def upload_tus_chunk(
         lock = asyncio.Lock()
         _upload_locks[upload_id] = lock
     async with lock:
-        upload = await run_in_threadpool(metadata_store.get_upload, upload_id)
-
-        if not upload:
-            raise HTTPException(status_code=404, detail="Upload not found")
+        upload = _require_open_upload(
+            await run_in_threadpool(metadata_store.get_upload, upload_id)
+        )
         await _authorize_upload(request, upload)
 
         # Verify offset
@@ -478,12 +553,30 @@ async def upload_tus_chunk(
 
         logger.info(f"TUS Chunk {upload_id}: +{chunk_size} bytes, new_offset={new_offset}")
 
-        # Complete if done
+        # Complete if done. Finalize before answering: the client marks the
+        # upload successful on this 204, so the file must already be listed.
         if new_offset == upload["size"]:
             logger.info(f"TUS Complete (Local): {upload_id}")
             await run_in_threadpool(metadata_store.mark_completed, upload_id)
-            # Trigger finalization (can be awaited or background, strictly speaking instant move is fast enough)
-            background_tasks.add_task(finalize_upload_local, upload)
+            try:
+                final_path = await finalize_upload_local(upload)
+            except HTTPException as error:
+                logger.error(
+                    f"Finalizing upload {upload_id} was rejected: {error.detail}",
+                    exc_info=True,
+                )
+                await _abort_failed_finalization(upload_id)
+                raise
+            except Exception as error:
+                logger.error(
+                    f"Error in finalize_upload_local for {upload_id}: {error}",
+                    exc_info=True,
+                )
+                await _abort_failed_finalization(upload_id)
+                raise HTTPException(
+                    status_code=500, detail="Failed to store the uploaded file"
+                ) from error
+            background_tasks.add_task(_deduplicate_in_background, final_path)
 
         return Response(
             status_code=status.HTTP_204_NO_CONTENT,

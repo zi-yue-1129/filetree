@@ -6,8 +6,6 @@ Uses the backend services for consistent data management.
 
 import asyncio
 import click
-from pathlib import Path
-import json
 from backend.services.user_service import UserService
 from backend.core.auth import generate_salt, hash_password
 from backend.config import settings
@@ -87,6 +85,31 @@ def backup() -> None:
 
     set_dir = create_backup(default_sources(), settings.backup.dir, settings.backup.keep)
     click.echo(f'[OK] Backup written to {set_dir}')
+
+
+@cli.command('recover-uploads')
+@click.option('--dry-run', is_flag=True, help='Only list the uploads that would be imported.')
+@async_command
+async def recover_uploads(dry_run: bool) -> None:
+    """Import finished uploads that were left in tus_temp and never listed.
+
+    Args:
+        dry_run: Only list the uploads that would be imported.
+    """
+    from backend.routes.tus import metadata_store, recover_stranded_uploads
+    from backend.services.database import close_all, init_db
+
+    await init_db()
+    try:
+        upload_ids = await recover_stranded_uploads(dry_run)
+    finally:
+        await close_all()
+    for upload_id in upload_ids:
+        upload = metadata_store.get_upload(upload_id)
+        owner = upload['username'] if upload else '?'
+        name = upload['filename'] if upload else '?'
+        click.echo(f'{"[PLAN]" if dry_run else "[OK]"} {owner}: {name} ({upload_id})')
+    click.echo(f'{"Would import" if dry_run else "Imported"} {len(upload_ids)} upload(s).')
 
 
 if __name__ == '__main__':
