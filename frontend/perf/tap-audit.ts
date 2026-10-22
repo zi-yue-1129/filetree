@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium, type Browser, type Page } from 'playwright';
 import { fakeAndroidBridge } from './lib/fakeAndroid.ts';
+import { NATIVE_FILE_SIZE, emitNativeProgress, nativeUploadResponses, submitNativeUpload } from './lib/nativeUpload.ts';
 import { startStack } from './lib/servers.ts';
 import { formatTapTarget, measureTapTargets, tapTargetProblems, type TapTarget } from './lib/tapTargets.ts';
 
@@ -39,6 +40,8 @@ interface AuditPageOptions {
   session: { token: string } | null;
   /** Simulate the Capacitor Android app. */
   native: boolean;
+  /** Extra canned plugin responses for the simulated app. */
+  nativeResponses?: Record<string, unknown>;
 }
 
 /**
@@ -72,7 +75,7 @@ async function openPhonePage(browser: Browser, options: AuditPageOptions): Promi
     // Nothing may leave the machine (the app checks GitHub for updates); the
     // harness always serves the app from 127.0.0.1.
     await context.route((url) => url.hostname !== '127.0.0.1', (route) => route.abort());
-    await context.addInitScript(fakeAndroidBridge, { launchUrl: null });
+    await context.addInitScript(fakeAndroidBridge, { launchUrl: null, responses: options.nativeResponses });
   }
   const page = await context.newPage();
   page.on('dialog', (dialog) => void dialog.accept());
@@ -278,6 +281,22 @@ async function auditNativeSettings(page: Page, baseUrl: string, capture: Capture
   await capture('native-menu-drawer', 'aside:has(nav)');
 }
 
+/**
+ * Native landing page while a background upload is in flight (inline progress).
+ *
+ * @param page - Native phone page with a signed-in device.
+ * @param baseUrl - App URL.
+ * @param capture - Recorder.
+ */
+async function auditNativeUploadProgress(page: Page, baseUrl: string, capture: Capture): Promise<void> {
+  await submitNativeUpload(page, baseUrl, PASSWORD);
+  const progress = page.getByRole('region', { name: '上傳進度' });
+  await progress.waitFor();
+  await emitNativeProgress(page, 'uploading', NATIVE_FILE_SIZE / 2);
+  await progress.scrollIntoViewIfNeeded();
+  await capture('native-upload-progress');
+}
+
 /** Run the audit. */
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -333,6 +352,10 @@ async function main(): Promise<void> {
           { options: { theme, effects, session, native: false }, audit: (page, capture) => auditDashboard(page, stack.baseUrl, capture) },
           { options: { theme, effects, session: null, native: false }, audit: (page, capture) => auditLoggedOut(page, stack.baseUrl, capture) },
           { options: { theme, effects, session, native: true }, audit: (page, capture) => auditNativeSettings(page, stack.baseUrl, capture) },
+          {
+            options: { theme, effects, session, native: true, nativeResponses: nativeUploadResponses() },
+            audit: (page, capture) => auditNativeUploadProgress(page, stack.baseUrl, capture),
+          },
         ];
         for (const run of runs) {
           const page = await openPhonePage(browser, run.options);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { m, AnimatePresence } from 'framer-motion';
 import { UploadCloud } from 'lucide-react';
@@ -12,15 +12,28 @@ import type Uppy from '@uppy/core';
 // Uppy styles
 import '@uppy/core/css/style.min.css';
 import { apiUrl } from '../services/api';
-import { getErrorMessage, isMobileNative, pickNativeFiles, pickNativeFolder } from '../native';
-import type { NativeFile } from '../native';
+import { FileNexusNative, getErrorMessage, isMobileNative, pickNativeFiles, pickNativeFolder } from '../native';
+import type { NativeFile, UploadJob } from '../native';
+import { useNativeUploads } from '../native/hooks';
+import { isActiveUploadState } from '../native/uploadJobs';
 import { NativePendingFilesPanel } from '../native/landing/NativePendingFilesPanel';
+import { NativeUploadProgress } from '../native/landing/NativeUploadProgress';
 import { makePendingFolder } from '../native/landing/pendingFolder';
 import type { PendingNativeFolder } from '../native/landing/pendingFolder';
 import { enqueueLandingFiles } from '../native/landing/landingUpload';
 
 /** Minimum spacing of upload-progress re-renders (at most 4 per second). */
 const PROGRESS_COMMIT_INTERVAL_MS = 250;
+
+/** Where to go after a submit, held back while native uploads run. */
+interface PostSubmitRedirect {
+  /** Logged-in account. */
+  username: string;
+  /** Account still has its initial password (security modal first). */
+  firstLogin: boolean;
+  /** Password typed for this submit (needed by the security modal). */
+  oldPassword: string;
+}
 
 interface LandingPageProps {
   data: {
@@ -49,6 +62,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
   // Folder picks stay grouped so the pending list renders one row per folder.
   const [nativeFolders, setNativeFolders] = useState<PendingNativeFolder[]>([]);
   const nextFolderId = useRef(0);
+  // Native queue jobs started by submits on this page, shown with live
+  // progress in the pending panel (the web shows Uppy progress there).
+  const nativeUploads = useNativeUploads();
+  const refreshNativeUploads = nativeUploads.refresh;
+  const [trackedJobIds, setTrackedJobIds] = useState<string[]>([]);
+  const [pendingRedirect, setPendingRedirect] = useState<PostSubmitRedirect | null>(null);
+  const trackedJobs = useMemo((): UploadJob[] => {
+    const byId = new Map((nativeUploads.data ?? []).map((job) => [job.jobId, job]));
+    return trackedJobIds.flatMap((jobId) => {
+      const job = byId.get(jobId);
+      return job ? [job] : [];
+    });
+  }, [nativeUploads.data, trackedJobIds]);
+  const trackedSettled = trackedJobIds.length > 0
+    && trackedJobs.length === trackedJobIds.length
+    && trackedJobs.every((job) => !isActiveUploadState(job.state));
+  const trackedAllCompleted = trackedSettled && trackedJobs.every((job) => job.state === 'completed');
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [firstLoginUserInfo, setFirstLoginUserInfo] = useState<{ username: string, oldPwd: string } | null>(null);
@@ -277,6 +307,44 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
       }
   }, [uppy]);
 
+  /**
+   * Continue after a successful submit: security modal on first login,
+   * otherwise the account's dashboard.
+   *
+   * @param redirect - Target account and first-login state.
+   */
+  const finishRedirect = useCallback((redirect: PostSubmitRedirect): void => {
+    setPendingRedirect(null);
+    if (redirect.firstLogin) {
+      setFirstLoginUserInfo({ username: redirect.username, oldPwd: redirect.oldPassword });
+      setRedirectPath(`/${redirect.username}`);
+    } else {
+      navigate(`/${redirect.username}`);
+    }
+  }, [navigate]);
+
+  // Like the web flow (which awaits Uppy), open the dashboard once every
+  // native upload of this submit finished. Failures stay visible inline.
+  useEffect(() => {
+    if (pendingRedirect && trackedAllCompleted) finishRedirect(pendingRedirect);
+  }, [pendingRedirect, trackedAllCompleted, finishRedirect]);
+
+  // The queue state could not be read: say so instead of waiting forever.
+  useEffect(() => {
+    if (!pendingRedirect || !nativeUploads.error) return;
+    alert(`無法讀取上傳進度：${nativeUploads.error}。檔案仍會在背景上傳，可到「App 設定」查看。`);
+    finishRedirect(pendingRedirect);
+  }, [pendingRedirect, nativeUploads.error, finishRedirect]);
+
+  const handleCancelNativeUpload = useCallback((jobId: string): void => {
+    FileNexusNative.cancelUpload({ jobId })
+      .catch((err: unknown) => {
+        console.error('Cancelling native upload failed', err);
+        alert(`無法取消上傳：${getErrorMessage(err)}`);
+      })
+      .finally(() => void refreshNativeUploads());
+  }, [refreshNativeUploads]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) {
@@ -300,12 +368,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
     }
 
     setIsSyncing(true);
+    setPendingRedirect(null);
 
     try {
       // 1a. Native apps: hand picked files to the background upload queue.
       let nativeUploadUser: string | null = null;
       if (hasNativeFiles) {
-        nativeUploadUser = await enqueueLandingFiles(allNativeFiles);
+        const enqueued = await enqueueLandingFiles(allNativeFiles);
+        nativeUploadUser = enqueued.username;
+        setTrackedJobIds((previous) => [...previous, ...enqueued.jobIds]);
+        await refreshNativeUploads();
         setNativeFiles([]);
         setNativeFolders([]);
       }
@@ -344,11 +416,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
         if (hasNativeFiles && nativeUploadUser && nativeUploadUser !== user.username) {
           alert(`檔案正在背景上傳到此裝置登入的帳號「${nativeUploadUser}」`);
         }
-        if (user.first_login) {
-          setFirstLoginUserInfo({ username: user.username, oldPwd: password });
-          setRedirectPath(`/${user.username}`);
+        const redirect: PostSubmitRedirect = {
+          username: user.username,
+          firstLogin: Boolean(user.first_login),
+          oldPassword: password,
+        };
+        if (hasNativeFiles) {
+          // Stay here with inline progress until the native queue is done.
+          setPendingRedirect(redirect);
         } else {
-          navigate(`/${user.username}`);
+          finishRedirect(redirect);
         }
       } else {
         alert('資料已提交，但自動登入失敗 (密碼可能錯誤？)');
@@ -583,10 +660,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({ data }) => {
               password={password}
               setPassword={setPassword}
               onSubmit={handleSubmit}
-              isSyncing={isSyncing}
+              isSyncing={isSyncing && !(pendingRedirect !== null && trackedSettled)}
               onNativePickFiles={nativeMode ? handleNativePick : undefined}
               onNativePickFolder={nativeMode ? handleNativePickFolder : undefined}
            />
+           {/* Native apps: live progress of the background queue, right in
+               the upload card's column (the web shows Uppy progress inline). */}
+           {nativeMode && trackedJobs.length > 0 && (
+             <div className="glass-card mt-4 p-4 rounded-3xl">
+               <h3 className="mb-3 text-[0.6rem] font-black text-gray-500 dark:text-stellar-label uppercase tracking-[0.2em]">
+                 上傳進度 ({trackedJobs.length})
+               </h3>
+               <NativeUploadProgress
+                 jobs={trackedJobs}
+                 onCancel={handleCancelNativeUpload}
+                 onContinueInBackground={pendingRedirect ? () => finishRedirect(pendingRedirect) : undefined}
+               />
+             </div>
+           )}
         </div>
 
 

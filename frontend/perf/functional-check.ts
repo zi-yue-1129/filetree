@@ -3,12 +3,14 @@
  * uploader add/remove, notes, effects toggle, dashboard folder navigation,
  * selection, rename and the lazily loaded QR dialog — on a phone viewport and
  * on desktop, in full, low-power and plain mode. Finally, in a simulated
- * Capacitor Android app: copied share links and App Link routing.
+ * Capacitor Android app: copied share links, App Link routing and the inline
+ * native upload progress on the landing page.
  *
  * The build must set VITE_SITE_URL (the native link checks read it back from
  * index.html), e.g. `VITE_SITE_URL=https://links.example.test npm run build`.
  *
  *   PERF_PYTHON=/path/to/venv/bin/python timeout 600 node perf/functional-check.ts [--dist dir] [--native-only]
+ *     [--upload-screenshot file.png]
  */
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium, type Browser, type Page } from 'playwright';
 import { fakeAndroidBridge } from './lib/fakeAndroid.ts';
+import { checkNativeUploadProgress } from './lib/nativeUpload.ts';
 import { startStack } from './lib/servers.ts';
 import { formatTapTarget, measureTapTargets, tapTargetProblems } from './lib/tapTargets.ts';
 
@@ -852,6 +855,8 @@ async function main(): Promise<void> {
       'preview-port': { type: 'string', default: '4294' },
       // Run only the simulated-native link checks (faster iteration).
       'native-only': { type: 'boolean', default: false },
+      // Save a phone screenshot of the inline native upload progress here.
+      'upload-screenshot': { type: 'string' },
     },
   });
   const python = process.env.PERF_PYTHON;
@@ -903,6 +908,8 @@ async function main(): Promise<void> {
     process.stdout.write('ok native/share-links\n');
     await checkNativeAppLinks(browser, stack.baseUrl, session, siteOrigin);
     process.stdout.write('ok native/app-links\n');
+    await checkNativeUploadProgress(browser, stack.baseUrl, session, PASSWORD, values['upload-screenshot'] ?? null);
+    process.stdout.write('ok native/upload-progress\n');
   } finally {
     await browser.close();
     await stack.stop();

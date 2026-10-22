@@ -5,20 +5,11 @@
 import React, { useState } from 'react';
 import { ListChecks, X } from 'lucide-react';
 import { FileNexusNative, enqueueNativeUpload, getErrorMessage } from '../index';
-import type { UploadJob } from '../index';
 import { useNativeUploads, useSharedItems } from '../hooks';
+import { UPLOAD_STATE_LABEL, isActiveUploadState, uploadPercent } from '../uploadJobs';
 import { formatBytes } from './format';
 import { ActionButton, Message, SettingsSection } from './ui';
 
-/** zh-TW labels for upload states. */
-const STATE_LABEL: Record<UploadJob['state'], string> = {
-  queued: '等待中',
-  uploading: '上傳中',
-  retrying: '稍後重試',
-  completed: '完成',
-  failed: '失敗',
-  cancelled: '已取消',
-};
 
 /** Props of {@link UploadQueueSection}. */
 interface UploadQueueSectionProps {
@@ -77,8 +68,8 @@ export const UploadQueueSection: React.FC<UploadQueueSectionProps> = ({ deviceSi
       ) : (
         <ul className="space-y-2">
           {jobs.map((job) => {
-            const percent = job.bytesTotal > 0 ? Math.min(100, (job.bytesSent / job.bytesTotal) * 100) : 0;
-            const active = job.state === 'queued' || job.state === 'uploading' || job.state === 'retrying';
+            const percent = uploadPercent(job.bytesSent, job.bytesTotal);
+            const active = isActiveUploadState(job.state);
             return (
               <li key={job.jobId} className="rounded-xl border border-gray-200 dark:border-white/10 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -98,7 +89,7 @@ export const UploadQueueSection: React.FC<UploadQueueSectionProps> = ({ deviceSi
                   <div className="h-full bg-quantum-cyan transition-all" style={{ width: `${percent}%` }} />
                 </div>
                 <div className="flex justify-between text-xs text-gray-500 dark:text-white/40">
-                  <span>{STATE_LABEL[job.state]}{job.source === 'backup' ? '・相簿備份' : job.source === 'share' ? '・分享' : ''}</span>
+                  <span>{UPLOAD_STATE_LABEL[job.state]}{job.source === 'backup' ? '・相簿備份' : job.source === 'share' ? '・分享' : ''}</span>
                   <span>{formatBytes(job.bytesSent)} / {formatBytes(job.bytesTotal)}</span>
                 </div>
                 {job.error && job.state !== 'completed' && <p className="text-xs text-red-500">{job.error}</p>}
