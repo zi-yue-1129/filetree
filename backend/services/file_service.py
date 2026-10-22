@@ -8,6 +8,7 @@ Reconciliation on startup syncs disk ↔ DB.
 
 import asyncio
 import os
+import shutil
 import tempfile
 import zipfile
 from datetime import datetime, timedelta
@@ -199,6 +200,54 @@ class FileService:
         )
         await db.commit()
 
+    async def _is_indexed(self, username: str, filename: str) -> bool:
+        """Report whether the account index already has a file of this name.
+
+        ``files`` is unique on ``(username, filename)`` across all folders, so
+        a name that is free on disk in one folder may still be taken.
+
+        Args:
+            username: The username (folder field value).
+            filename: Candidate file name.
+
+        Returns:
+            True when a row with this name exists.
+        """
+        db = await get_files_db()
+        cursor = await db.execute(
+            "SELECT 1 FROM files WHERE username = ? AND filename = ? LIMIT 1",
+            (username, filename),
+        )
+        return await cursor.fetchone() is not None
+
+    async def _unique_filename(
+        self,
+        username: str,
+        folder: Path,
+        filename: str,
+        own_name: Optional[str] = None,
+    ) -> str:
+        """Pick ``name``, ``name_1``, ... free on disk and in the account index.
+
+        Args:
+            username: The username (folder field value).
+            folder: Destination directory.
+            filename: Desired file name (already a basename).
+            own_name: Indexed name of the file being moved, which may keep it.
+
+        Returns:
+            A name that neither exists in ``folder`` nor in another index row.
+        """
+        name, ext = os.path.splitext(filename)
+        candidate = filename
+        counter = 1
+        while (folder / candidate).exists() or (
+            candidate != own_name and await self._is_indexed(username, candidate)
+        ):
+            candidate = f"{name}_{counter}{ext}"
+            counter += 1
+        return candidate
+
     # ------------------------------------------------------------------
     # File operations (disk + DB)
     # ------------------------------------------------------------------
@@ -225,13 +274,7 @@ class FileService:
         """
         filename = os.path.basename(filename)
         folder = self._get_folder_path(username, folder_path_names or [])
-        name, ext = os.path.splitext(filename)
-        counter = 1
-        unique_name = filename
-
-        while (folder / unique_name).exists():
-            unique_name = f"{name}_{counter}{ext}"
-            counter += 1
+        unique_name = await self._unique_filename(username, folder, filename)
 
         async with aiofiles.open(folder / unique_name, mode="wb") as f:
             await f.write(content)
@@ -348,13 +391,10 @@ class FileService:
         if not (old_folder / filename).exists():
             return False
 
-        # Ensure name uniqueness in target
-        name, ext = os.path.splitext(filename)
-        target_name = filename
-        counter = 1
-        while (new_folder / target_name).exists():
-            target_name = f"{name}_{counter}{ext}"
-            counter += 1
+        # Ensure name uniqueness in target (disk and account index)
+        target_name = await self._unique_filename(
+            username, new_folder, filename, own_name=filename
+        )
 
         await aiofiles.os.rename(old_folder / filename, new_folder / target_name)
 
@@ -382,8 +422,13 @@ class FileService:
         filename: str,
         folder_path_names: Optional[List[str]] = None,
         folder_id: Optional[str] = None,
-    ) -> Optional[str]:
-        """Import a file from a local path into the user's folder (move).
+        deduplicate: bool = True,
+    ) -> Path:
+        """Move a finished upload into the user's folder and index it.
+
+        The source may live on another filesystem: the Windows deployment
+        bind-mounts ``tus_temp`` and ``uploads`` separately, where ``rename(2)``
+        fails with ``EXDEV``. ``shutil.move`` then copies and deletes instead.
 
         Args:
             source_path: Path to the source file (will be moved).
@@ -391,46 +436,43 @@ class FileService:
             filename: The original filename.
             folder_path_names: Optional physical subpath.
             folder_id: Optional folder ID for DB.
+            deduplicate: Run content deduplication inline; callers that
+                schedule it themselves pass False.
 
         Returns:
-            The final unique filename, or None on failure.
+            The final path; its name is unique on disk and in the index.
+
+        Raises:
+            FileNotFoundError: If ``source_path`` does not exist.
+            OSError: If the file cannot be moved or indexed. A file that was
+                already moved is removed again so disk and index agree.
         """
         filename = os.path.basename(filename)
         folder = self._get_folder_path(username, folder_path_names or [])
 
         if not source_path.exists():
-            return None
+            raise FileNotFoundError(f"Upload source is missing: {source_path}")
 
-        name, ext = os.path.splitext(filename)
-        counter = 1
-        unique_name = filename
-
-        while (folder / unique_name).exists():
-            unique_name = f"{name}_{counter}{ext}"
-            counter += 1
-
+        unique_name = await self._unique_filename(username, folder, filename)
         target_path = folder / unique_name
 
+        await asyncio.to_thread(shutil.move, str(source_path), str(target_path))
         try:
-            await aiofiles.os.rename(source_path, target_path)
             stat = target_path.stat()
-
             await self._register_file(
                 username, unique_name, stat.st_size,
                 datetime.fromtimestamp(stat.st_mtime), folder_id,
             )
+        except BaseException:
+            # Keep disk and index consistent: an unindexed file is invisible.
+            target_path.unlink(missing_ok=True)
+            raise
 
-            # Trigger deduplication
+        if deduplicate:
             from backend.services.dedup_service import dedup_service
-            try:
-                await dedup_service.deduplicate(target_path)
-            except Exception as e:
-                logger.warning(f"Dedup failed for imported file {unique_name}: {e}")
+            await dedup_service.deduplicate(target_path)
 
-            return unique_name
-        except Exception as e:
-            logger.error(f"Failed to import file: {e}")
-            return None
+        return target_path
 
     # ------------------------------------------------------------------
     # Lock management

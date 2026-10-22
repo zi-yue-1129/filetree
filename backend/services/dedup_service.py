@@ -72,8 +72,15 @@ class DedupService:
                     # 3. Deduplicate!
                     # Remove the new file and replace with hardlink to existing
                     print(f"Deduplicating {file_path.name} -> {existing_path.name}")
-                    os.remove(file_path)
-                    os.link(existing_path, file_path)
+                    # Link beside the file first and swap atomically, so a link
+                    # that fails (EXDEV, no hardlink support) never deletes it.
+                    link_path = file_path.with_name(f".{file_path.name}.dedup-link")
+                    try:
+                        os.link(existing_path, link_path)
+                    except OSError:
+                        link_path.unlink(missing_ok=True)
+                        raise
+                    os.replace(link_path, file_path)
                     return True
                 else:
                     # Stale index, update it

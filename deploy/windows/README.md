@@ -139,3 +139,12 @@ docker compose up -d --build
 ```
 資料庫在 volume `filenexus-db` 中,自動備份見第 8 節。更新前建議先手動備份一次:
 `docker compose exec backend python -m backend.cli backup`。
+
+## 上傳完成卻看不到檔案(找回卡在 tus_temp 的檔案)
+`uploads` 與 `tus_temp` 是兩個獨立掛載點,舊版後端在兩者之間搬檔會失敗
+(`Invalid cross-device link`),檔案留在 `F:\FILESTATION\tus_temp`(檔名為 UUID)
+卻沒有出現在個人頁面。更新後端後執行一次:
+```powershell
+docker compose exec backend python -m backend.cli recover-uploads --dry-run   # 先看會匯入哪些
+docker compose exec backend python -m backend.cli recover-uploads             # 實際匯入
+```

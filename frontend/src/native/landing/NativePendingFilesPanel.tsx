@@ -136,7 +136,7 @@ export const NativePendingFilesPanel: React.FC<NativePendingFilesPanelProps> = (
         )}
       </div>
       <p className="px-5 py-3 text-[0.65rem] text-gray-400 dark:text-white/30 border-t border-gray-200 dark:border-white/5">
-        送出後會在背景上傳，可到「App 設定」查看進度。
+        送出後會在背景上傳，進度顯示在上方的上傳區，也可到「App 設定」查看。
       </p>
     </div>
   );

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './useAuth';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { apiRequest, wsUrl as buildWsUrl } from '../services/api';
+import { isMobileNative, onUploadProgress } from '../native';
+import type { PluginListenerHandle } from '@capacitor/core';
 import type { UserDashboardData } from '../types/dashboard';
 
 /**
@@ -90,6 +92,27 @@ export function useUserDashboard(initialData: UserDashboardData) {
       console.log("[useUserDashboard] Received REFRESH signal");
       refreshDashboard(token);
     }
+  }, [refreshDashboard, token]);
+
+  // Native apps: a background upload may finish while the WebSocket is down
+  // (app in background, socket dropped). The server indexes the file before
+  // acknowledging the last chunk, so a completed job means "refetch now".
+  useEffect(() => {
+    if (!isMobileNative()) return undefined;
+    let handle: PluginListenerHandle | null = null;
+    let disposed = false;
+    onUploadProgress((event) => {
+      if (event.state === 'completed') void refreshDashboard(token);
+    })
+      .then((created) => {
+        if (disposed) void created.remove();
+        else handle = created;
+      })
+      .catch((error: unknown) => console.error('Failed to subscribe to native upload progress', error));
+    return () => {
+      disposed = true;
+      if (handle) void handle.remove();
+    };
   }, [refreshDashboard, token]);
 
   const { isConnected } = useWebSocket(wsUrl, {

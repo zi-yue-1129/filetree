@@ -221,6 +221,19 @@ class TusMetadataStore:
             conn.commit()
             return cursor.rowcount > 0
     
+    def list_completed(self) -> List[Dict[str, Any]]:
+        """List uploads marked completed, oldest first.
+
+        Returns:
+            Upload records with status ``completed``.
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM tus_uploads WHERE status = 'completed' "
+                "ORDER BY created_at"
+            ).fetchall()
+            return [self._row_to_dict(row) for row in rows]
+
     def mark_aborted(self, upload_id: str) -> bool:
         """Mark upload as aborted."""
         with self._get_connection() as conn:
